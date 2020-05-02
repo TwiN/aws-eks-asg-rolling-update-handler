@@ -11,8 +11,7 @@ import (
 	"github.com/aws/aws-sdk-go/service/autoscaling/autoscalingiface"
 	"github.com/aws/aws-sdk-go/service/ec2"
 	"github.com/aws/aws-sdk-go/service/ec2/ec2iface"
-	corev1 "k8s.io/api/core/v1"
-	v1 "k8s.io/api/core/v1"
+	"k8s.io/api/core/v1"
 	"log"
 	"time"
 )
@@ -81,9 +80,9 @@ func HandleRollingUpgrade(ec2Service ec2iface.EC2API, autoScalingService autosca
 				log.Printf("[%s][%s] Skipping", *autoScalingGroup.AutoScalingGroupName, *updatedInstance.InstanceId)
 				continue
 			}
-			// Check if kubelet is ready to accept pods on that node
+			// Check if Kubelet is ready to accept pods on that node
 			conditions := updatedNode.Status.Conditions
-			if kubeletCondition := conditions[len(conditions)-1]; kubeletCondition.Type == corev1.NodeReady && kubeletCondition.Status == v1.ConditionTrue {
+			if kubeletCondition := conditions[len(conditions)-1]; kubeletCondition.Type == v1.NodeReady && kubeletCondition.Status == v1.ConditionTrue {
 				updatedReadyNodes = append(updatedReadyNodes, updatedNode)
 			} else {
 				numberOfNonReadyNodesOrInstances++
