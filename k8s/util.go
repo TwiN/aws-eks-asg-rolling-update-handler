@@ -5,7 +5,7 @@ import (
 	"log"
 )
 
-func CheckIfNodeHasEnoughResourcesToTransferAllPodsInNodes(oldNode *v1.Node, targetNodes []*v1.Node) bool {
+func CheckIfNodeHasEnoughResourcesToTransferAllPodsInNodes(kubernetesClient KubernetesClientApi, oldNode *v1.Node, targetNodes []*v1.Node) bool {
 	// If there's no target nodes, then there's definitely not enough resources available
 	if len(targetNodes) == 0 {
 		return false
@@ -16,7 +16,7 @@ func CheckIfNodeHasEnoughResourcesToTransferAllPodsInNodes(oldNode *v1.Node, tar
 	for _, targetNode := range targetNodes {
 		availableTargetCpu := targetNode.Status.Allocatable.Cpu().MilliValue()
 		availableTargetMemory := targetNode.Status.Allocatable.Memory().MilliValue()
-		podsInNode, err := GetPodsInNode(targetNode.Name)
+		podsInNode, err := kubernetesClient.GetPodsInNode(targetNode.Name)
 		if err != nil {
 			continue
 		}
@@ -39,7 +39,7 @@ func CheckIfNodeHasEnoughResourcesToTransferAllPodsInNodes(oldNode *v1.Node, tar
 	cpuNeeded := int64(0)
 	memoryNeeded := int64(0)
 	// Get resources requested in old node
-	podsInNode, err := GetPodsInNode(oldNode.Name)
+	podsInNode, err := kubernetesClient.GetPodsInNode(oldNode.Name)
 	if err != nil {
 		log.Printf("Unable to determine resources needed for old node, assuming that enough resources are available")
 		return true
@@ -59,4 +59,21 @@ func CheckIfNodeHasEnoughResourcesToTransferAllPodsInNodes(oldNode *v1.Node, tar
 	leftOverCpu := totalAvailableTargetCpu - cpuNeeded
 	leftOverMemory := totalAvailableTargetMemory - memoryNeeded
 	return leftOverCpu > 0 && leftOverMemory > 0
+}
+
+func AnnotateNodeByHostName(kubernetesClient KubernetesClientApi, hostName, key, value string) error {
+	node, err := kubernetesClient.GetNodeByHostName(hostName)
+	if err != nil {
+		return err
+	}
+	annotations := node.GetAnnotations()
+	if currentValue := annotations[key]; currentValue != value {
+		annotations[key] = value
+		node.SetAnnotations(annotations)
+		err = kubernetesClient.UpdateNode(node)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }

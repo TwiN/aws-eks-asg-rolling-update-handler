@@ -32,10 +32,11 @@ func main() {
 
 func run() error {
 	cfg := config.Get()
-	_, err := k8s.CreateClient()
+	client, err := k8s.CreateClientSet()
 	if err != nil {
 		return fmt.Errorf("unable to create Kubernetes client: %s", err.Error())
 	}
+	kubernetesClient := k8s.NewKubernetesClient(client)
 
 	ec2Service, autoScalingService, err := cloud.GetServices()
 	if err != nil {
@@ -47,11 +48,11 @@ func run() error {
 		return fmt.Errorf("unable to describe AutoScalingGroups: %s", err.Error())
 	}
 
-	HandleRollingUpgrade(ec2Service, autoScalingService, autoScalingGroups)
+	HandleRollingUpgrade(kubernetesClient, ec2Service, autoScalingService, autoScalingGroups)
 	return nil
 }
 
-func HandleRollingUpgrade(ec2Service ec2iface.EC2API, autoScalingService autoscalingiface.AutoScalingAPI, autoScalingGroups []*autoscaling.Group) {
+func HandleRollingUpgrade(kubernetesClient k8s.KubernetesClientApi, ec2Service ec2iface.EC2API, autoScalingService autoscalingiface.AutoScalingAPI, autoScalingGroups []*autoscaling.Group) {
 	for _, autoScalingGroup := range autoScalingGroups {
 		outdatedInstances, updatedInstances, err := SeparateOutdatedFromUpdatedInstances(autoScalingGroup, ec2Service)
 		if err != nil {
@@ -60,8 +61,8 @@ func HandleRollingUpgrade(ec2Service ec2iface.EC2API, autoScalingService autosca
 			continue
 		}
 
-		log.Printf("outdatedInstances: %v", outdatedInstances)
-		log.Printf("updatedInstances: %v", updatedInstances)
+		//log.Printf("outdatedInstances: %v", outdatedInstances)
+		//log.Printf("updatedInstances: %v", updatedInstances)
 
 		// Get the updated and ready nodes from the list of updated instances
 		// This will be used to determine if the desired number of updated instances need to scale up or not
@@ -74,7 +75,7 @@ func HandleRollingUpgrade(ec2Service ec2iface.EC2API, autoScalingService autosca
 				log.Printf("[%s][%s] Skipping because instance is not in LifecycleState 'InService', but is in '%s' instead", *autoScalingGroup.AutoScalingGroupName, *updatedInstance.InstanceId, *updatedInstance.LifecycleState)
 				continue
 			}
-			updatedNode, err := k8s.GetNodeByHostName(*updatedInstance.InstanceId)
+			updatedNode, err := kubernetesClient.GetNodeByHostName(*updatedInstance.InstanceId)
 			if err != nil {
 				log.Printf("[%s][%s] Unable to get updated node from Kubernetes: %v", *autoScalingGroup.AutoScalingGroupName, *updatedInstance.InstanceId, err.Error())
 				log.Printf("[%s][%s] Skipping", *autoScalingGroup.AutoScalingGroupName, *updatedInstance.InstanceId)
@@ -110,7 +111,7 @@ func HandleRollingUpgrade(ec2Service ec2iface.EC2API, autoScalingService autosca
 							// Remove the annotation
 							delete(updatedNode.Annotations, k8s.RollingUpdateStartedTimestampAnnotationKey)
 							// Update the node
-							err = k8s.UpdateNode(updatedNode)
+							err = kubernetesClient.UpdateNode(updatedNode)
 							if err != nil {
 								log.Printf("[%s] EDGE-0001: Unable to update tainted node %s: %v", *autoScalingGroup.AutoScalingGroupName, updatedNode.Name, err.Error())
 							}
@@ -133,7 +134,7 @@ func HandleRollingUpgrade(ec2Service ec2iface.EC2API, autoScalingService autosca
 		}
 
 		for _, outdatedInstance := range outdatedInstances {
-			node, err := k8s.GetNodeByHostName(*outdatedInstance.InstanceId)
+			node, err := kubernetesClient.GetNodeByHostName(*outdatedInstance.InstanceId)
 			if err != nil {
 				log.Printf("[%s][%s] Unable to get outdated node from Kubernetes: %v", *autoScalingGroup.AutoScalingGroupName, *outdatedInstance.InstanceId, err.Error())
 				log.Printf("[%s][%s] Skipping", *autoScalingGroup.AutoScalingGroupName, *outdatedInstance.InstanceId)
@@ -146,7 +147,7 @@ func HandleRollingUpgrade(ec2Service ec2iface.EC2API, autoScalingService autosca
 			if minutesSinceStarted == -1 {
 				log.Printf("[%s][%s] Starting node rollout process", *autoScalingGroup.AutoScalingGroupName, *outdatedInstance.InstanceId)
 				// Annotate the node to persist the fact that the rolling update process has begun
-				err := k8s.AnnotateNodeByHostName(*outdatedInstance.InstanceId, k8s.RollingUpdateStartedTimestampAnnotationKey, time.Now().Format(time.RFC3339))
+				err := k8s.AnnotateNodeByHostName(kubernetesClient, *outdatedInstance.InstanceId, k8s.RollingUpdateStartedTimestampAnnotationKey, time.Now().Format(time.RFC3339))
 				if err != nil {
 					log.Printf("[%s][%s] Unable to annotate node: %v", *autoScalingGroup.AutoScalingGroupName, *outdatedInstance.InstanceId, err.Error())
 					// XXX: should we really skip here?
@@ -158,18 +159,18 @@ func HandleRollingUpgrade(ec2Service ec2iface.EC2API, autoScalingService autosca
 			} else {
 				log.Printf("[%s][%s] Node already started rollout process", *autoScalingGroup.AutoScalingGroupName, *outdatedInstance.InstanceId)
 				// check if existing updatedInstances have the capacity to support what's inside this node
-				hasEnoughResources := k8s.CheckIfNodeHasEnoughResourcesToTransferAllPodsInNodes(node, updatedReadyNodes)
+				hasEnoughResources := k8s.CheckIfNodeHasEnoughResourcesToTransferAllPodsInNodes(kubernetesClient, node, updatedReadyNodes)
 				if hasEnoughResources {
 					log.Printf("[%s][%s] Updated nodes have enough resources available", *autoScalingGroup.AutoScalingGroupName, *outdatedInstance.InstanceId)
 					if minutesSinceDrained == -1 {
 						log.Printf("[%s][%s] Draining node", *autoScalingGroup.AutoScalingGroupName, *outdatedInstance.InstanceId)
-						err := k8s.Drain(node.Name, config.Get().IgnoreDaemonSets, config.Get().DeleteLocalData)
+						err := kubernetesClient.Drain(node.Name, config.Get().IgnoreDaemonSets, config.Get().DeleteLocalData)
 						if err != nil {
 							log.Printf("[%s][%s] Ran into error while draining node: %v", *autoScalingGroup.AutoScalingGroupName, *outdatedInstance.InstanceId, err.Error())
 							log.Printf("[%s][%s] Skipping", *autoScalingGroup.AutoScalingGroupName, *outdatedInstance.InstanceId)
 							continue
 						} else {
-							_ = k8s.AnnotateNodeByHostName(*outdatedInstance.InstanceId, k8s.RollingUpdateDrainedTimestampAnnotationKey, time.Now().Format(time.RFC3339))
+							_ = k8s.AnnotateNodeByHostName(kubernetesClient, *outdatedInstance.InstanceId, k8s.RollingUpdateDrainedTimestampAnnotationKey, time.Now().Format(time.RFC3339))
 						}
 					} else {
 						log.Printf("[%s][%s] Node has already been drained, skipping", *autoScalingGroup.AutoScalingGroupName, *outdatedInstance.InstanceId)
@@ -182,7 +183,7 @@ func HandleRollingUpgrade(ec2Service ec2iface.EC2API, autoScalingService autosca
 							log.Printf("[%s][%s] Ran into error while terminating node: %v", *autoScalingGroup.AutoScalingGroupName, *outdatedInstance.InstanceId, err.Error())
 							continue
 						} else {
-							_ = k8s.AnnotateNodeByHostName(*outdatedInstance.InstanceId, k8s.RollingUpdateTerminatedTimestampAnnotationKey, time.Now().Format(time.RFC3339))
+							_ = k8s.AnnotateNodeByHostName(kubernetesClient, *outdatedInstance.InstanceId, k8s.RollingUpdateTerminatedTimestampAnnotationKey, time.Now().Format(time.RFC3339))
 						}
 					} else {
 						log.Printf("[%s][%s] Node is already in the process of being terminated, skipping", *autoScalingGroup.AutoScalingGroupName, *outdatedInstance.InstanceId)
