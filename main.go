@@ -64,9 +64,16 @@ func HandleRollingUpgrade(ec2Service ec2iface.EC2API, autoScalingService autosca
 			log.Printf("[%s] Skipping", *autoScalingGroup.AutoScalingGroupName)
 			continue
 		}
+
 		log.Printf("outdatedInstances: %v", outdatedInstances)
 		log.Printf("updatedInstances: %v", updatedInstances)
-		// Check if outdated nodes in k8s have been marked with cluster
+
+		if len(outdatedInstances) == 0 {
+			log.Printf("[%s] All instances up to date", *autoScalingGroup.AutoScalingGroupName)
+			continue
+		}
+
+		// Check if outdated nodes in k8s have been marked with annotation from aws-eks-asg-rolling-update-handler
 
 		// Check if ASG hit max, and then decide what to do (patience or violence)
 	}
