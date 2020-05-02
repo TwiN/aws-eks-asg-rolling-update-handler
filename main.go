@@ -66,6 +66,9 @@ func HandleRollingUpgrade(ec2Service ec2iface.EC2API, autoScalingService autosca
 		}
 		log.Printf("outdatedInstances: %v", outdatedInstances)
 		log.Printf("updatedInstances: %v", updatedInstances)
+		// Check if outdated nodes in k8s have been marked with cluster
+
+		// Check if ASG hit max, and then decide what to do (patience or violence)
 	}
 }
 
@@ -137,7 +140,6 @@ func SeparateOutdatedFromUpdatedInstancesUsingLaunchConfiguration(targetLaunchCo
 		oldInstances []*autoscaling.Instance
 		newInstances []*autoscaling.Instance
 	)
-	// go through each instance and find those that are not with the target LC
 	for _, i := range instances {
 		if i.LaunchConfigurationName != nil && *i.LaunchConfigurationName == *targetLaunchConfigurationName {
 			newInstances = append(newInstances, i)
