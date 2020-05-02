@@ -83,6 +83,16 @@ func AnnotateNodeByHostName(hostName, key, value string) error {
 	return nil
 }
 
+func UpdateNode(node *corev1.Node) error {
+	client, err := CreateClient()
+	if err != nil {
+		return err
+	}
+	api := client.CoreV1().Nodes()
+	_, err = api.Update(node)
+	return err
+}
+
 func Drain(nodeName string, ignoreDaemonSets, deleteLocalData bool) error {
 	client, err := CreateClient()
 	if err != nil {

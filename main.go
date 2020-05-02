@@ -64,13 +64,9 @@ func HandleRollingUpgrade(ec2Service ec2iface.EC2API, autoScalingService autosca
 		log.Printf("outdatedInstances: %v", outdatedInstances)
 		log.Printf("updatedInstances: %v", updatedInstances)
 
-		if len(outdatedInstances) == 0 {
-			log.Printf("[%s] All instances are up to date", *autoScalingGroup.AutoScalingGroupName)
-			continue
-		}
-
 		// Get the updated and ready nodes from the list of updated instances
 		// This will be used to determine if the desired number of updated instances need to scale up or not
+		// We also use this to clean up, if necessary
 		var updatedReadyNodes []*v1.Node
 		numberOfNonReadyNodesOrInstances := 0
 		for _, updatedInstance := range updatedInstances {
@@ -87,11 +83,48 @@ func HandleRollingUpgrade(ec2Service ec2iface.EC2API, autoScalingService autosca
 			}
 			// Check if kubelet is ready to accept pods on that node
 			conditions := updatedNode.Status.Conditions
-			if conditions[len(conditions)-1].Type == corev1.NodeReady {
+			if kubeletCondition := conditions[len(conditions)-1]; kubeletCondition.Type == corev1.NodeReady && kubeletCondition.Status == v1.ConditionTrue {
 				updatedReadyNodes = append(updatedReadyNodes, updatedNode)
 			} else {
 				numberOfNonReadyNodesOrInstances++
 			}
+			// Cleaning up
+			// This is an edge case, but it may happen that an ASG's launch template is modified, creating a new
+			// template version, but then that new template version is deleted before the node has been terminated.
+			// To make it even more of an edge case, the draining function would've had to time out, meaning that
+			// the termination would be skipped until the next run.
+			// This would cause an instance to be considered as updated, even though it has been drained therefore
+			// cordoned (NoSchedule).
+			if startedAtValue, ok := updatedNode.Annotations[k8s.RollingUpdateStartedTimestampAnnotationKey]; ok {
+				// An updated node should never have k8s.RollingUpdateStartedTimestampAnnotationKey, so this indicates that
+				// at one point, this node was considered old compared to the ASG's current LT/LC
+				// First, check if there's a NoSchedule taint
+				for i, taint := range updatedNode.Spec.Taints {
+					if taint.Effect == v1.TaintEffectNoSchedule {
+						// There's a taint, but we need to make sure it was added after the rolling update started
+						startedAt, err := time.Parse(time.RFC3339, startedAtValue)
+						// If the annotation can't be parsed OR the taint was added after the rolling updated started,
+						// we need to remove that taint
+						if err != nil || taint.TimeAdded.Time.After(startedAt) {
+							// Remove the taint
+							updatedNode.Spec.Taints = append(updatedNode.Spec.Taints[:i], updatedNode.Spec.Taints[i+1:]...)
+							// Remove the annotation
+							delete(updatedNode.Annotations, k8s.RollingUpdateStartedTimestampAnnotationKey)
+							// Update the node
+							err = k8s.UpdateNode(updatedNode)
+							if err != nil {
+								log.Printf("[%s] EDGE-0001: Unable to update tainted node %s: %v", *autoScalingGroup.AutoScalingGroupName, updatedNode.Name, err.Error())
+							}
+							break
+						}
+					}
+				}
+			}
+		}
+
+		if len(outdatedInstances) == 0 {
+			log.Printf("[%s] All instances are up to date", *autoScalingGroup.AutoScalingGroupName)
+			continue
 		}
 
 		// XXX: this should be configurable (i.e. SLOW_ROLLING_UPDATE)
@@ -129,12 +162,11 @@ func HandleRollingUpgrade(ec2Service ec2iface.EC2API, autoScalingService autosca
 				hasEnoughResources := k8s.CheckIfNodeHasEnoughResourcesToTransferAllPodsInNodes(node, updatedReadyNodes)
 				if hasEnoughResources {
 					log.Printf("[%s][%s] Updated nodes have enough resources available", *autoScalingGroup.AutoScalingGroupName, *outdatedInstance.InstanceId)
-					log.Printf("[%s][%s] Draining node", *autoScalingGroup.AutoScalingGroupName, *outdatedInstance.InstanceId)
-					if minutesSinceDrained != -1 {
+					if minutesSinceDrained == -1 {
+						log.Printf("[%s][%s] Draining node", *autoScalingGroup.AutoScalingGroupName, *outdatedInstance.InstanceId)
 						err := k8s.Drain(node.Name, config.Get().IgnoreDaemonSets, config.Get().DeleteLocalData)
 						if err != nil {
 							log.Printf("[%s][%s] Ran into error while draining node: %v", *autoScalingGroup.AutoScalingGroupName, *outdatedInstance.InstanceId, err.Error())
-							// XXX: should this really be skipped? or should I combine this with startedAt to determine when we've been lenient enough to terminate to node
 							log.Printf("[%s][%s] Skipping", *autoScalingGroup.AutoScalingGroupName, *outdatedInstance.InstanceId)
 							continue
 						} else {
@@ -143,7 +175,7 @@ func HandleRollingUpgrade(ec2Service ec2iface.EC2API, autoScalingService autosca
 					} else {
 						log.Printf("[%s][%s] Node has already been drained, skipping", *autoScalingGroup.AutoScalingGroupName, *outdatedInstance.InstanceId)
 					}
-					if minutesSinceTerminated != -1 {
+					if minutesSinceTerminated == -1 {
 						// Terminate node
 						log.Printf("[%s][%s] Terminating node", *autoScalingGroup.AutoScalingGroupName, *outdatedInstance.InstanceId)
 						err = cloud.TerminateEc2Instance(autoScalingService, outdatedInstance)
@@ -160,6 +192,7 @@ func HandleRollingUpgrade(ec2Service ec2iface.EC2API, autoScalingService autosca
 					return
 				} else {
 					log.Printf("[%s][%s] Updated nodes do not have enough resources available, increasing desired count by 1", *autoScalingGroup.AutoScalingGroupName, *outdatedInstance.InstanceId)
+					// TODO: check if desired capacity matches (updatedInstances + outdatedInstances + 1)
 					err := cloud.SetAutoScalingGroupDesiredCount(autoScalingService, autoScalingGroup, *autoScalingGroup.DesiredCapacity+1)
 					if err != nil {
 						log.Printf("[%s][%s] Unable to increase ASG desired size: %v", *autoScalingGroup.AutoScalingGroupName, *outdatedInstance.InstanceId, err.Error())
@@ -170,19 +203,7 @@ func HandleRollingUpgrade(ec2Service ec2iface.EC2API, autoScalingService autosca
 				}
 			}
 		}
-
-		//nodes, err := k8s.GetNodes()
-		//if err != nil {
-		//	log.Printf("[%s] Unable to get nodes from Kubernetes: %v", *autoScalingGroup.AutoScalingGroupName, err.Error())
-		//	log.Printf("[%s] Skipping", *autoScalingGroup.AutoScalingGroupName)
-		//	continue
-		//}
-		//
-		//for _, node := range nodes {
-		//	if
-		//}
-
-		// Check if ASG hit max, and then decide what to do (patience or violence)
+		// TODO: Check if ASG hit max, and then decide what to do (patience or violence)
 	}
 }
 
