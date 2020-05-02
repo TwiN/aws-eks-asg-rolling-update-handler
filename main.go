@@ -263,7 +263,7 @@ func SeparateOutdatedFromUpdatedInstancesUsingLaunchTemplate(targetLaunchTemplat
 	switch {
 	case targetLaunchTemplate.LaunchTemplateId != nil && *targetLaunchTemplate.LaunchTemplateId != "":
 		if targetTemplate, err = cloud.DescribeLaunchTemplateByID(ec2Svc, *targetLaunchTemplate.LaunchTemplateId); err != nil {
-			return nil, nil, fmt.Errorf("error retrieving information about launch template ID %s: %v", *targetLaunchTemplate.LaunchTemplateId, err)
+			return nil, nil, fmt.Errorf("error retrieving information about launch template %s: %v", *targetLaunchTemplate.LaunchTemplateId, err)
 		}
 	case targetLaunchTemplate.LaunchTemplateName != nil && *targetLaunchTemplate.LaunchTemplateName != "":
 		if targetTemplate, err = cloud.DescribeLaunchTemplateByName(ec2Svc, *targetLaunchTemplate.LaunchTemplateName); err != nil {
