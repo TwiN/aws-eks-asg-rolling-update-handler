@@ -1,6 +1,7 @@
 package cloud
 
 import (
+	"errors"
 	"fmt"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
@@ -8,6 +9,10 @@ import (
 	"github.com/aws/aws-sdk-go/service/autoscaling/autoscalingiface"
 	"github.com/aws/aws-sdk-go/service/ec2"
 	"github.com/aws/aws-sdk-go/service/ec2/ec2iface"
+)
+
+var (
+	ErrCannotIncreaseDesiredCountAboveMax = errors.New("cannot incease ASG desired size above max ASG size")
 )
 
 func GetServices() (ec2iface.EC2API, autoscalingiface.AutoScalingAPI, error) {
@@ -57,4 +62,28 @@ func DescribeLaunchTemplate(svc ec2iface.EC2API, input *ec2.DescribeLaunchTempla
 		return nil, nil
 	}
 	return templatesOutput.LaunchTemplates[0], nil
+}
+
+func SetAutoScalingGroupDesiredCount(svc autoscalingiface.AutoScalingAPI, asg *autoscaling.Group, count int64) error {
+	if count > *asg.MaxSize {
+		return ErrCannotIncreaseDesiredCountAboveMax
+	}
+	desiredInput := &autoscaling.SetDesiredCapacityInput{
+		AutoScalingGroupName: asg.AutoScalingGroupName,
+		DesiredCapacity:      aws.Int64(count),
+		HonorCooldown:        aws.Bool(true),
+	}
+	_, err := svc.SetDesiredCapacity(desiredInput)
+	if err != nil {
+		return fmt.Errorf("unable to increase ASG %s desired count to %d: %v", *asg.AutoScalingGroupName, count, err)
+	}
+	return nil
+}
+
+func TerminateEc2Instance(svc autoscalingiface.AutoScalingAPI, instance *autoscaling.Instance) error {
+	_, err := svc.TerminateInstanceInAutoScalingGroup(&autoscaling.TerminateInstanceInAutoScalingGroupInput{
+		InstanceId:                     aws.String(*instance.InstanceId),
+		ShouldDecrementDesiredCapacity: aws.Bool(true),
+	})
+	return err
 }

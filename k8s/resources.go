@@ -11,9 +11,11 @@ import (
 )
 
 const (
-	ScaleDownDisabledAnnotationKey      = "cluster-autoscaler.kubernetes.io/scale-down-disabled"
-	RollingUpdateStartTimeAnnotationKey = "aws-eks-asg-rolling-update-handler/start-time"
-	HostNameAnnotationKey               = "kubernetes.io/hostname"
+	ScaleDownDisabledAnnotationKey                = "cluster-autoscaler.kubernetes.io/scale-down-disabled"
+	RollingUpdateStartedTimestampAnnotationKey    = "aws-eks-asg-rolling-update-handler/started-at"
+	RollingUpdateDrainedTimestampAnnotationKey    = "aws-eks-asg-rolling-update-handler/drained-at"
+	RollingUpdateTerminatedTimestampAnnotationKey = "aws-eks-asg-rolling-update-handler/terminated-at"
+	HostNameAnnotationKey                         = "kubernetes.io/hostname"
 )
 
 func GetNodes() ([]corev1.Node, error) {
@@ -46,7 +48,17 @@ func GetNodeByHostName(hostName string) (*corev1.Node, error) {
 		return nil, err
 	}
 	api := client.CoreV1().Nodes()
-	return api.Get(hostName, v1.GetOptions{})
+	nodeList, err := api.List(v1.ListOptions{
+		LabelSelector: fmt.Sprintf("kubernetes.io/hostname=%s", hostName),
+		Limit:         1,
+	})
+	if err != nil {
+		return nil, err
+	}
+	if len(nodeList.Items) == 0 {
+		return nil, fmt.Errorf("nodes with hostname \"%s\" not found", hostName)
+	}
+	return &nodeList.Items[0], nil
 }
 
 func AnnotateNodeByHostName(hostName, key, value string) error {
@@ -54,8 +66,7 @@ func AnnotateNodeByHostName(hostName, key, value string) error {
 	if err != nil {
 		return err
 	}
-	api := client.CoreV1().Nodes()
-	node, err := api.Get(hostName, v1.GetOptions{})
+	node, err := GetNodeByHostName(hostName)
 	if err != nil {
 		return err
 	}
@@ -63,6 +74,7 @@ func AnnotateNodeByHostName(hostName, key, value string) error {
 	if currentValue := annotations[key]; currentValue != value {
 		annotations[key] = value
 		node.SetAnnotations(annotations)
+		api := client.CoreV1().Nodes()
 		_, err := api.Update(node)
 		if err != nil {
 			return err
@@ -71,12 +83,12 @@ func AnnotateNodeByHostName(hostName, key, value string) error {
 	return nil
 }
 
-func Drain(hostName string, ignoreDaemonSets, deleteLocalData bool) error {
+func Drain(nodeName string, ignoreDaemonSets, deleteLocalData bool) error {
 	client, err := CreateClient()
 	if err != nil {
 		return err
 	}
-	node, err := client.CoreV1().Nodes().Get(hostName, v1.GetOptions{})
+	node, err := client.CoreV1().Nodes().Get(nodeName, v1.GetOptions{})
 	if err != nil {
 		return err
 	}
@@ -99,8 +111,8 @@ func CheckIfNodeHasEnoughResourcesToTransferAllPodsInNodes(oldNode *corev1.Node,
 	totalAvailableTargetMemory := int64(0)
 	// Get resources available in target nodes
 	for _, targetNode := range targetNodes {
-		availableTargetCpu := targetNode.Status.Allocatable.Cpu().Value()
-		availableTargetMemory := targetNode.Status.Allocatable.Memory().Value()
+		availableTargetCpu := targetNode.Status.Allocatable.Cpu().MilliValue()
+		availableTargetMemory := targetNode.Status.Allocatable.Memory().MilliValue()
 		podsInNode, err := GetPodsInNode(targetNode.Name)
 		if err != nil {
 			continue
@@ -109,14 +121,15 @@ func CheckIfNodeHasEnoughResourcesToTransferAllPodsInNodes(oldNode *corev1.Node,
 			for _, container := range podInNode.Spec.Containers {
 				if container.Resources.Requests.Cpu() != nil {
 					// Subtract the cpu request of the pod from the node's total allocatable
-					availableTargetCpu -= container.Resources.Requests.Cpu().Value()
+					availableTargetCpu -= container.Resources.Requests.Cpu().MilliValue()
 				}
 				if container.Resources.Requests.Memory() != nil {
 					// Subtract the cpu request of the pod from the node's total allocatable
-					totalAvailableTargetMemory -= container.Resources.Requests.Memory().Value()
+					totalAvailableTargetMemory -= container.Resources.Requests.Memory().MilliValue()
 				}
 			}
 		}
+
 		totalAvailableTargetCpu += availableTargetCpu
 		totalAvailableTargetMemory += availableTargetMemory
 	}
@@ -132,11 +145,11 @@ func CheckIfNodeHasEnoughResourcesToTransferAllPodsInNodes(oldNode *corev1.Node,
 		for _, container := range podInNode.Spec.Containers {
 			if container.Resources.Requests.Cpu() != nil {
 				// Subtract the cpu request of the pod from the node's total allocatable
-				cpuNeeded += container.Resources.Requests.Cpu().Value()
+				cpuNeeded += container.Resources.Requests.Cpu().MilliValue()
 			}
 			if container.Resources.Requests.Memory() != nil {
 				// Subtract the cpu request of the pod from the node's total allocatable
-				memoryNeeded += container.Resources.Requests.Memory().Value()
+				memoryNeeded += container.Resources.Requests.Memory().MilliValue()
 			}
 		}
 	}

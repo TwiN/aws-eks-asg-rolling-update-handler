@@ -9,7 +9,12 @@ Inspired by aws-asg-roller, this application only has one purpose: Scale down ou
 Unlike aws-asg-roller, it will not attempt to control the amount of nodes at all; it will scale up enough new nodes
 to move the pods from the old nodes to the new nodes, and then evict the old nodes. 
 
-Everything else will be up to cluster-autoscaler.
+It will not adjust the desired size back to its initial desired size like aws-asg-roller does, it will simply leave
+everything else will be up to cluster-autoscaler.
+
+Note that unlike other solutions, this application actually uses the resources to determine how many instances should 
+be spun up before draining the old nodes. This is much better, because simply using the initial number of instances is 
+completely useless in the event that the ASG's update on the launch configuration/template is a change of instance type.
 
 
 ## Usage

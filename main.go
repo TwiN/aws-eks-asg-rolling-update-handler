@@ -22,12 +22,13 @@ func main() {
 	if err != nil {
 		log.Fatalf("Unable to initialize configuration: %s", err.Error())
 	}
-	//for {
-	if err := run(); err != nil {
-		log.Printf("Error during execution: %s", err.Error())
+	for {
+		if err := run(); err != nil {
+			log.Printf("Error during execution: %s", err.Error())
+		}
+		log.Println("Sleeping for 10 seconds")
+		time.Sleep(10 * time.Second)
 	}
-	//    time.Sleep(time.Minute)
-	//}
 }
 
 func run() error {
@@ -48,14 +49,6 @@ func run() error {
 	}
 
 	HandleRollingUpgrade(ec2Service, autoScalingService, autoScalingGroups)
-	//nodes, err := k8s.GetNodes()
-	//if err != nil {
-	//	return fmt.Errorf("unable to get nodes: %s", err.Error())
-	//}
-	//
-	//for _, node := range nodes {
-	//	log.Printf("%v", node)
-	//}
 	return nil
 }
 
@@ -79,7 +72,13 @@ func HandleRollingUpgrade(ec2Service ec2iface.EC2API, autoScalingService autosca
 		// Get the updated and ready nodes from the list of updated instances
 		// This will be used to determine if the desired number of updated instances need to scale up or not
 		var updatedReadyNodes []*v1.Node
+		numberOfNonReadyNodesOrInstances := 0
 		for _, updatedInstance := range updatedInstances {
+			if *updatedInstance.LifecycleState != "InService" {
+				numberOfNonReadyNodesOrInstances++
+				log.Printf("[%s][%s] Skipping because instance is not in LifecycleState 'InService', but is in '%s' instead", *autoScalingGroup.AutoScalingGroupName, *updatedInstance.InstanceId, *updatedInstance.LifecycleState)
+				continue
+			}
 			updatedNode, err := k8s.GetNodeByHostName(*updatedInstance.InstanceId)
 			if err != nil {
 				log.Printf("[%s][%s] Unable to get updated node from Kubernetes: %v", *autoScalingGroup.AutoScalingGroupName, *updatedInstance.InstanceId, err.Error())
@@ -90,10 +89,17 @@ func HandleRollingUpgrade(ec2Service ec2iface.EC2API, autoScalingService autosca
 			conditions := updatedNode.Status.Conditions
 			if conditions[len(conditions)-1].Type == corev1.NodeReady {
 				updatedReadyNodes = append(updatedReadyNodes, updatedNode)
+			} else {
+				numberOfNonReadyNodesOrInstances++
 			}
 		}
 
-		// Check if outdated nodes in k8s have been marked with annotation from aws-eks-asg-rolling-update-handler
+		// XXX: this should be configurable (i.e. SLOW_ROLLING_UPDATE)
+		if numberOfNonReadyNodesOrInstances != 0 {
+			log.Printf("[%s] ASG has %d non-ready updated nodes/instances, waiting until all nodes/instances are ready", *autoScalingGroup.AutoScalingGroupName, numberOfNonReadyNodesOrInstances)
+			continue
+		}
+
 		for _, outdatedInstance := range outdatedInstances {
 			node, err := k8s.GetNodeByHostName(*outdatedInstance.InstanceId)
 			if err != nil {
@@ -101,10 +107,14 @@ func HandleRollingUpgrade(ec2Service ec2iface.EC2API, autoScalingService autosca
 				log.Printf("[%s][%s] Skipping", *autoScalingGroup.AutoScalingGroupName, *outdatedInstance.InstanceId)
 				continue
 			}
-			if rollingUpdateStartedAt, ok := node.Annotations[k8s.RollingUpdateStartTimeAnnotationKey]; !ok {
-				// Start rolling update process (first run)
-				// annotate the node with the start time
-				err := k8s.AnnotateNodeByHostName(*outdatedInstance.InstanceId, k8s.RollingUpdateStartTimeAnnotationKey, time.Now().Format(time.RFC3339))
+
+			minutesSinceStarted, minutesSinceDrained, minutesSinceTerminated := getRollingUpdateTimestampsFromNode(node)
+
+			// Check if outdated nodes in k8s have been marked with annotation from aws-eks-asg-rolling-update-handler
+			if minutesSinceStarted == -1 {
+				log.Printf("[%s][%s] Starting node rollout process", *autoScalingGroup.AutoScalingGroupName, *outdatedInstance.InstanceId)
+				// Annotate the node to persist the fact that the rolling update process has begun
+				err := k8s.AnnotateNodeByHostName(*outdatedInstance.InstanceId, k8s.RollingUpdateStartedTimestampAnnotationKey, time.Now().Format(time.RFC3339))
 				if err != nil {
 					log.Printf("[%s][%s] Unable to annotate node: %v", *autoScalingGroup.AutoScalingGroupName, *outdatedInstance.InstanceId, err.Error())
 					// XXX: should we really skip here?
@@ -114,26 +124,49 @@ func HandleRollingUpgrade(ec2Service ec2iface.EC2API, autoScalingService autosca
 				// TODO: increase desired instance by 1 (to create a new updated instance)
 
 			} else {
-				startedAt, err := time.Parse(time.RFC3339, rollingUpdateStartedAt)
-				if err != nil {
-					log.Printf("[%s][%s] Assuming rollout hasn't started because couldn't parse %s annotation: %v", *autoScalingGroup.AutoScalingGroupName, *outdatedInstance.InstanceId, k8s.RollingUpdateStartTimeAnnotationKey, err.Error())
-				}
+				log.Printf("[%s][%s] Node already started rollout process", *autoScalingGroup.AutoScalingGroupName, *outdatedInstance.InstanceId)
 				// check if existing updatedInstances have the capacity to support what's inside this node
 				hasEnoughResources := k8s.CheckIfNodeHasEnoughResourcesToTransferAllPodsInNodes(node, updatedReadyNodes)
 				if hasEnoughResources {
-					// TODO:
-					//k8s.Drain()
-					//terminate node
+					log.Printf("[%s][%s] Updated nodes have enough resources available", *autoScalingGroup.AutoScalingGroupName, *outdatedInstance.InstanceId)
+					log.Printf("[%s][%s] Draining node", *autoScalingGroup.AutoScalingGroupName, *outdatedInstance.InstanceId)
+					if minutesSinceDrained != -1 {
+						err := k8s.Drain(node.Name, config.Get().IgnoreDaemonSets, config.Get().DeleteLocalData)
+						if err != nil {
+							log.Printf("[%s][%s] Ran into error while draining node: %v", *autoScalingGroup.AutoScalingGroupName, *outdatedInstance.InstanceId, err.Error())
+							// XXX: should this really be skipped? or should I combine this with startedAt to determine when we've been lenient enough to terminate to node
+							log.Printf("[%s][%s] Skipping", *autoScalingGroup.AutoScalingGroupName, *outdatedInstance.InstanceId)
+							continue
+						} else {
+							_ = k8s.AnnotateNodeByHostName(*outdatedInstance.InstanceId, k8s.RollingUpdateDrainedTimestampAnnotationKey, time.Now().Format(time.RFC3339))
+						}
+					} else {
+						log.Printf("[%s][%s] Node has already been drained, skipping", *autoScalingGroup.AutoScalingGroupName, *outdatedInstance.InstanceId)
+					}
+					if minutesSinceTerminated != -1 {
+						// Terminate node
+						log.Printf("[%s][%s] Terminating node", *autoScalingGroup.AutoScalingGroupName, *outdatedInstance.InstanceId)
+						err = cloud.TerminateEc2Instance(autoScalingService, outdatedInstance)
+						if err != nil {
+							log.Printf("[%s][%s] Ran into error while terminating node: %v", *autoScalingGroup.AutoScalingGroupName, *outdatedInstance.InstanceId, err.Error())
+							continue
+						} else {
+							_ = k8s.AnnotateNodeByHostName(*outdatedInstance.InstanceId, k8s.RollingUpdateTerminatedTimestampAnnotationKey, time.Now().Format(time.RFC3339))
+						}
+					} else {
+						log.Printf("[%s][%s] Node is already in the process of being terminated, skipping", *autoScalingGroup.AutoScalingGroupName, *outdatedInstance.InstanceId)
+						// TODO: check if minutesSinceTerminated > 10. If that happens, then there's clearly a problem, so we should do something about it
+					}
+					return
 				} else {
-					// TODO: increase desired instance by 1 (to create a new updated instance)
-				}
-				// If the rollout started over 5 minutes ago but it's not done yet, and we also have
-				// more than one updated, ready node, we'll drain one more time for safety and them terminate it.
-				if (time.Since(startedAt).Minutes() > 5 || err != nil) && len(updatedReadyNodes) > 0 {
-					log.Printf("[%s][%s] Node has started rollout %s ago, but has not completed. Draining node one more time for safety measure and terminating node immediately.", *autoScalingGroup.AutoScalingGroupName, *outdatedInstance.InstanceId, time.Since(startedAt))
-					// TODO:
-					//k8s.Drain()
-					//terminate node
+					log.Printf("[%s][%s] Updated nodes do not have enough resources available, increasing desired count by 1", *autoScalingGroup.AutoScalingGroupName, *outdatedInstance.InstanceId)
+					err := cloud.SetAutoScalingGroupDesiredCount(autoScalingService, autoScalingGroup, *autoScalingGroup.DesiredCapacity+1)
+					if err != nil {
+						log.Printf("[%s][%s] Unable to increase ASG desired size: %v", *autoScalingGroup.AutoScalingGroupName, *outdatedInstance.InstanceId, err.Error())
+						log.Printf("[%s][%s] Skipping", *autoScalingGroup.AutoScalingGroupName, *outdatedInstance.InstanceId)
+						continue
+					}
+					return
 				}
 			}
 		}
@@ -151,6 +184,37 @@ func HandleRollingUpgrade(ec2Service ec2iface.EC2API, autoScalingService autosca
 
 		// Check if ASG hit max, and then decide what to do (patience or violence)
 	}
+}
+
+func getRollingUpdateTimestampsFromNode(node *v1.Node) (minutesSinceStarted int, minutesSinceDrained int, minutesSinceTerminated int) {
+	rollingUpdateStartedAt, ok := node.Annotations[k8s.RollingUpdateStartedTimestampAnnotationKey]
+	if ok {
+		startedAt, err := time.Parse(time.RFC3339, rollingUpdateStartedAt)
+		if err == nil {
+			minutesSinceStarted = int(time.Since(startedAt).Minutes())
+		}
+	} else {
+		minutesSinceStarted = -1
+	}
+	drainedAtValue, ok := node.Annotations[k8s.RollingUpdateDrainedTimestampAnnotationKey]
+	if ok {
+		drainedAt, err := time.Parse(time.RFC3339, drainedAtValue)
+		if err == nil {
+			minutesSinceDrained = int(time.Since(drainedAt).Minutes())
+		}
+	} else {
+		minutesSinceDrained = -1
+	}
+	terminatedAtValue, ok := node.Annotations[k8s.RollingUpdateTerminatedTimestampAnnotationKey]
+	if ok {
+		terminatedAt, err := time.Parse(time.RFC3339, terminatedAtValue)
+		if err == nil {
+			minutesSinceTerminated = int(time.Since(terminatedAt).Minutes())
+		}
+	} else {
+		minutesSinceTerminated = -1
+	}
+	return
 }
 
 func SeparateOutdatedFromUpdatedInstances(asg *autoscaling.Group, ec2Svc ec2iface.EC2API) ([]*autoscaling.Instance, []*autoscaling.Instance, error) {
