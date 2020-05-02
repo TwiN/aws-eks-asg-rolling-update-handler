@@ -11,7 +11,10 @@ import (
 	"github.com/aws/aws-sdk-go/service/autoscaling/autoscalingiface"
 	"github.com/aws/aws-sdk-go/service/ec2"
 	"github.com/aws/aws-sdk-go/service/ec2/ec2iface"
+	corev1 "k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	"log"
+	"time"
 )
 
 func main() {
@@ -69,11 +72,82 @@ func HandleRollingUpgrade(ec2Service ec2iface.EC2API, autoScalingService autosca
 		log.Printf("updatedInstances: %v", updatedInstances)
 
 		if len(outdatedInstances) == 0 {
-			log.Printf("[%s] All instances up to date", *autoScalingGroup.AutoScalingGroupName)
+			log.Printf("[%s] All instances are up to date", *autoScalingGroup.AutoScalingGroupName)
 			continue
 		}
 
+		// Get the updated and ready nodes from the list of updated instances
+		// This will be used to determine if the desired number of updated instances need to scale up or not
+		var updatedReadyNodes []*v1.Node
+		for _, updatedInstance := range updatedInstances {
+			updatedNode, err := k8s.GetNodeByHostName(*updatedInstance.InstanceId)
+			if err != nil {
+				log.Printf("[%s][%s] Unable to get updated node from Kubernetes: %v", *autoScalingGroup.AutoScalingGroupName, *updatedInstance.InstanceId, err.Error())
+				log.Printf("[%s][%s] Skipping", *autoScalingGroup.AutoScalingGroupName, *updatedInstance.InstanceId)
+				continue
+			}
+			// Check if kubelet is ready to accept pods on that node
+			conditions := updatedNode.Status.Conditions
+			if conditions[len(conditions)-1].Type == corev1.NodeReady {
+				updatedReadyNodes = append(updatedReadyNodes, updatedNode)
+			}
+		}
+
 		// Check if outdated nodes in k8s have been marked with annotation from aws-eks-asg-rolling-update-handler
+		for _, outdatedInstance := range outdatedInstances {
+			node, err := k8s.GetNodeByHostName(*outdatedInstance.InstanceId)
+			if err != nil {
+				log.Printf("[%s][%s] Unable to get outdated node from Kubernetes: %v", *autoScalingGroup.AutoScalingGroupName, *outdatedInstance.InstanceId, err.Error())
+				log.Printf("[%s][%s] Skipping", *autoScalingGroup.AutoScalingGroupName, *outdatedInstance.InstanceId)
+				continue
+			}
+			if rollingUpdateStartedAt, ok := node.Annotations[k8s.RollingUpdateStartTimeAnnotationKey]; !ok {
+				// Start rolling update process (first run)
+				// annotate the node with the start time
+				err := k8s.AnnotateNodeByHostName(*outdatedInstance.InstanceId, k8s.RollingUpdateStartTimeAnnotationKey, time.Now().Format(time.RFC3339))
+				if err != nil {
+					log.Printf("[%s][%s] Unable to annotate node: %v", *autoScalingGroup.AutoScalingGroupName, *outdatedInstance.InstanceId, err.Error())
+					// XXX: should we really skip here?
+					log.Printf("[%s][%s] Skipping", *autoScalingGroup.AutoScalingGroupName, *outdatedInstance.InstanceId)
+					continue
+				}
+				// TODO: increase desired instance by 1 (to create a new updated instance)
+
+			} else {
+				startedAt, err := time.Parse(time.RFC3339, rollingUpdateStartedAt)
+				if err != nil {
+					log.Printf("[%s][%s] Assuming rollout hasn't started because couldn't parse %s annotation: %v", *autoScalingGroup.AutoScalingGroupName, *outdatedInstance.InstanceId, k8s.RollingUpdateStartTimeAnnotationKey, err.Error())
+				}
+				// check if existing updatedInstances have the capacity to support what's inside this node
+				hasEnoughResources := k8s.CheckIfNodeHasEnoughResourcesToTransferAllPodsInNodes(node, updatedReadyNodes)
+				if hasEnoughResources {
+					// TODO:
+					//k8s.Drain()
+					//terminate node
+				} else {
+					// TODO: increase desired instance by 1 (to create a new updated instance)
+				}
+				// If the rollout started over 5 minutes ago but it's not done yet, and we also have
+				// more than one updated, ready node, we'll drain one more time for safety and them terminate it.
+				if (time.Since(startedAt).Minutes() > 5 || err != nil) && len(updatedReadyNodes) > 0 {
+					log.Printf("[%s][%s] Node has started rollout %s ago, but has not completed. Draining node one more time for safety measure and terminating node immediately.", *autoScalingGroup.AutoScalingGroupName, *outdatedInstance.InstanceId, time.Since(startedAt))
+					// TODO:
+					//k8s.Drain()
+					//terminate node
+				}
+			}
+		}
+
+		//nodes, err := k8s.GetNodes()
+		//if err != nil {
+		//	log.Printf("[%s] Unable to get nodes from Kubernetes: %v", *autoScalingGroup.AutoScalingGroupName, err.Error())
+		//	log.Printf("[%s] Skipping", *autoScalingGroup.AutoScalingGroupName)
+		//	continue
+		//}
+		//
+		//for _, node := range nodes {
+		//	if
+		//}
 
 		// Check if ASG hit max, and then decide what to do (patience or violence)
 	}
@@ -95,10 +169,6 @@ func SeparateOutdatedFromUpdatedInstances(asg *autoscaling.Group, ec2Svc ec2ifac
 }
 
 func SeparateOutdatedFromUpdatedInstancesUsingLaunchTemplate(targetLaunchTemplate *autoscaling.LaunchTemplateSpecification, instances []*autoscaling.Instance, ec2Svc ec2iface.EC2API) ([]*autoscaling.Instance, []*autoscaling.Instance, error) {
-	// we are using LaunchTemplate. Unlike LaunchConfiguration, you can have two nodes in the ASG
-	//  with the same LT name, same ID but different versions, so need to check version.
-	//  they even can have the same version, if the version is `$Latest` or `$Default`, so need
-	//  to get actual versions for each
 	var (
 		oldInstances   []*autoscaling.Instance
 		newInstances   []*autoscaling.Instance
@@ -122,23 +192,20 @@ func SeparateOutdatedFromUpdatedInstancesUsingLaunchTemplate(targetLaunchTemplat
 		return nil, nil, fmt.Errorf("no template found")
 	}
 	// now we can loop through each node and compare
-	for _, i := range instances {
+	for _, instance := range instances {
 		switch {
-		case i.LaunchTemplate == nil:
-			// has no launch template at all
-			oldInstances = append(oldInstances, i)
-		case aws.StringValue(i.LaunchTemplate.LaunchTemplateName) != aws.StringValue(targetLaunchTemplate.LaunchTemplateName):
-			oldInstances = append(oldInstances, i)
-		case aws.StringValue(i.LaunchTemplate.LaunchTemplateId) != aws.StringValue(targetLaunchTemplate.LaunchTemplateId):
-			oldInstances = append(oldInstances, i)
-		// name and id match, just need to check versions
-		case !compareLaunchTemplateVersions(targetTemplate, targetLaunchTemplate, i.LaunchTemplate):
-			oldInstances = append(oldInstances, i)
+		case instance.LaunchTemplate == nil:
+			fallthrough
+		case aws.StringValue(instance.LaunchTemplate.LaunchTemplateName) != aws.StringValue(targetLaunchTemplate.LaunchTemplateName):
+			fallthrough
+		case aws.StringValue(instance.LaunchTemplate.LaunchTemplateId) != aws.StringValue(targetLaunchTemplate.LaunchTemplateId):
+			fallthrough
+		case !compareLaunchTemplateVersions(targetTemplate, targetLaunchTemplate, instance.LaunchTemplate):
+			oldInstances = append(oldInstances, instance)
 		default:
-			newInstances = append(newInstances, i)
+			newInstances = append(newInstances, instance)
 		}
 	}
-
 	return oldInstances, newInstances, nil
 }
 
