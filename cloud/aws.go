@@ -9,6 +9,7 @@ import (
 	"github.com/aws/aws-sdk-go/service/autoscaling/autoscalingiface"
 	"github.com/aws/aws-sdk-go/service/ec2"
 	"github.com/aws/aws-sdk-go/service/ec2/ec2iface"
+	"log"
 )
 
 var (
@@ -35,6 +36,7 @@ func DescribeAutoScalingGroupsByNames(svc autoscalingiface.AutoScalingAPI, names
 }
 
 func DescribeLaunchTemplateByID(svc ec2iface.EC2API, id string) (*ec2.LaunchTemplate, error) {
+	log.Println("wat ", id)
 	input := &ec2.DescribeLaunchTemplatesInput{
 		LaunchTemplateIds: []*string{
 			aws.String(id),
