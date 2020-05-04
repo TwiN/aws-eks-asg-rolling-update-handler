@@ -65,7 +65,7 @@ func DescribeLaunchTemplate(svc ec2iface.EC2API, input *ec2.DescribeLaunchTempla
 }
 
 func SetAutoScalingGroupDesiredCount(svc autoscalingiface.AutoScalingAPI, asg *autoscaling.Group, count int64) error {
-	if count > *asg.MaxSize {
+	if count > aws.Int64Value(asg.MaxSize) {
 		return ErrCannotIncreaseDesiredCountAboveMax
 	}
 	desiredInput := &autoscaling.SetDesiredCapacityInput{
@@ -75,14 +75,14 @@ func SetAutoScalingGroupDesiredCount(svc autoscalingiface.AutoScalingAPI, asg *a
 	}
 	_, err := svc.SetDesiredCapacity(desiredInput)
 	if err != nil {
-		return fmt.Errorf("unable to increase ASG %s desired count to %d: %v", *asg.AutoScalingGroupName, count, err)
+		return fmt.Errorf("unable to increase ASG %s desired count to %d: %v", aws.StringValue(asg.AutoScalingGroupName), count, err)
 	}
 	return nil
 }
 
 func TerminateEc2Instance(svc autoscalingiface.AutoScalingAPI, instance *autoscaling.Instance) error {
 	_, err := svc.TerminateInstanceInAutoScalingGroup(&autoscaling.TerminateInstanceInAutoScalingGroupInput{
-		InstanceId:                     aws.String(*instance.InstanceId),
+		InstanceId:                     instance.InstanceId,
 		ShouldDecrementDesiredCapacity: aws.Bool(true),
 	})
 	return err

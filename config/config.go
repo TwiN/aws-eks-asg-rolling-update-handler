@@ -11,6 +11,7 @@ var cfg *config
 
 const (
 	EnvEnvironment           = "ENVIRONMENT"
+	EnvDebug                 = "DEBUG"
 	EnvIgnoreDaemonSets      = "IGNORE_DAEMON_SETS"
 	EnvDeleteLocalData       = "DELETE_LOCAL_DATA"
 	EnvAutoScalingGroupNames = "AUTO_SCALING_GROUP_NAMES"
@@ -20,6 +21,9 @@ const (
 type config struct {
 	// Optional
 	Environment string
+
+	// Defaults to false
+	Debug bool
 
 	// Required
 	AutoScalingGroupNames []string
@@ -38,6 +42,7 @@ type config struct {
 func Initialize() error {
 	cfg = &config{
 		Environment: strings.ToLower(os.Getenv(EnvEnvironment)),
+		Debug:       strings.ToLower(os.Getenv(EnvDebug)) == "true",
 	}
 	if autoScalingGroupNames := os.Getenv(EnvAutoScalingGroupNames); len(autoScalingGroupNames) == 0 {
 		return fmt.Errorf("environment variable '%s' is not set", EnvAutoScalingGroupNames)

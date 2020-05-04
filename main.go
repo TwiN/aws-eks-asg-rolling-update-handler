@@ -13,7 +13,6 @@ import (
 	"github.com/aws/aws-sdk-go/service/ec2/ec2iface"
 	"k8s.io/api/core/v1"
 	"log"
-	"os"
 	"time"
 )
 
@@ -39,15 +38,24 @@ func main() {
 
 func run(ec2Service ec2iface.EC2API, autoScalingService autoscalingiface.AutoScalingAPI) error {
 	cfg := config.Get()
+	if cfg.Debug {
+		log.Println("Starting execution")
+	}
 	client, err := k8s.CreateClientSet()
 	if err != nil {
 		return fmt.Errorf("unable to create Kubernetes client: %s", err.Error())
 	}
 	kubernetesClient := k8s.NewKubernetesClient(client)
+	if cfg.Debug {
+		log.Println("Created Kubernetes Client successfully")
+	}
 
 	autoScalingGroups, err := cloud.DescribeAutoScalingGroupsByNames(autoScalingService, cfg.AutoScalingGroupNames)
 	if err != nil {
 		return fmt.Errorf("unable to describe AutoScalingGroups: %s", err.Error())
+	}
+	if cfg.Debug {
+		log.Println("Described AutoScalingGroups successfully")
 	}
 
 	HandleRollingUpgrade(kubernetesClient, ec2Service, autoScalingService, autoScalingGroups)
@@ -63,7 +71,7 @@ func HandleRollingUpgrade(kubernetesClient k8s.KubernetesClientApi, ec2Service e
 			continue
 		}
 
-		if os.Getenv("DEBUG") == "true" {
+		if config.Get().Debug {
 			log.Printf("[%s] outdatedInstances: %v", aws.StringValue(autoScalingGroup.AutoScalingGroupName), outdatedInstances)
 			log.Printf("[%s] updatedInstances: %v", aws.StringValue(autoScalingGroup.AutoScalingGroupName), updatedInstances)
 		}
@@ -246,10 +254,13 @@ func getRollingUpdateTimestampsFromNode(node *v1.Node) (minutesSinceStarted int,
 }
 
 func SeparateOutdatedFromUpdatedInstances(asg *autoscaling.Group, ec2Svc ec2iface.EC2API) ([]*autoscaling.Instance, []*autoscaling.Instance, error) {
+	if config.Get().Debug {
+		log.Printf("[%s] Trying to separate outdated from updated instances", aws.StringValue(asg.AutoScalingGroupName))
+	}
 	targetLaunchConfiguration := asg.LaunchConfigurationName
 	targetLaunchTemplate := asg.LaunchTemplate
 	if targetLaunchTemplate == nil && asg.MixedInstancesPolicy != nil && asg.MixedInstancesPolicy.LaunchTemplate != nil {
-		log.Printf("[%s] using mixed instances policy launch template", *asg.AutoScalingGroupName)
+		log.Printf("[%s] using mixed instances policy launch template", aws.StringValue(asg.AutoScalingGroupName))
 		targetLaunchTemplate = asg.MixedInstancesPolicy.LaunchTemplate.LaunchTemplateSpecification
 	}
 	if targetLaunchTemplate != nil {
