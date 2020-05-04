@@ -9,7 +9,6 @@ import (
 	"github.com/aws/aws-sdk-go/service/autoscaling/autoscalingiface"
 	"github.com/aws/aws-sdk-go/service/ec2"
 	"github.com/aws/aws-sdk-go/service/ec2/ec2iface"
-	"time"
 )
 
 var (
@@ -27,14 +26,11 @@ func GetServices(awsRegion string) (ec2iface.EC2API, autoscalingiface.AutoScalin
 func DescribeAutoScalingGroupsByNames(svc autoscalingiface.AutoScalingAPI, names []string) ([]*autoscaling.Group, error) {
 	input := &autoscaling.DescribeAutoScalingGroupsInput{
 		AutoScalingGroupNames: aws.StringSlice(names),
-		//MaxRecords:            aws.Int64(int64(len(names))),
 	}
-	start := time.Now()
 	result, err := svc.DescribeAutoScalingGroups(input)
 	if err != nil {
 		return nil, err
 	}
-	fmt.Printf("Took %s\n", time.Since(start))
 	return result.AutoScalingGroups, nil
 }
 

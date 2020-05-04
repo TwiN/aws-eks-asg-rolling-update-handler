@@ -128,6 +128,7 @@ spec:
       automountServiceAccountToken: true
       serviceAccountName: aws-eks-asg-rolling-update-handler
       restartPolicy: Always
+      dnsPolicy: Default
       containers:
         - name: aws-eks-asg-rolling-update-handler
           image: twinproduction/aws-eks-asg-rolling-update-handler
