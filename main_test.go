@@ -2,7 +2,6 @@ package main
 
 import (
 	"errors"
-	"fmt"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/autoscaling"
 	"github.com/aws/aws-sdk-go/service/ec2"
@@ -66,7 +65,7 @@ func TestSeparateOutdatedFromUpdatedInstancesUsingLaunchTemplate_whenInstanceIsO
 		LaunchTemplateName:   updatedLaunchTemplate.LaunchTemplateName,
 	}
 	instance := createTestAutoScalingInstance("instance", "", outdatedLaunchTemplate, "Healthy")
-	outdated, updated, err := SeparateOutdatedFromUpdatedInstancesUsingLaunchTemplate(updatedLaunchTemplate, []*autoscaling.Instance{instance}, &mockEc2Svc{templates: []*ec2.LaunchTemplate{updatedEc2LaunchTemplate}})
+	outdated, updated, err := SeparateOutdatedFromUpdatedInstancesUsingLaunchTemplate(updatedLaunchTemplate, []*autoscaling.Instance{instance}, &MockEC2Service{templates: []*ec2.LaunchTemplate{updatedEc2LaunchTemplate}})
 	if err != nil {
 		t.Fatal("Shouldn't have returned an error, but returned:", err)
 	}
@@ -88,7 +87,7 @@ func TestSeparateOutdatedFromUpdatedInstancesUsingLaunchTemplate_whenInstanceIsU
 		LaunchTemplateName:   updatedLaunchTemplate.LaunchTemplateName,
 	}
 	instance := createTestAutoScalingInstance("instance", "", updatedLaunchTemplate, "Healthy")
-	outdated, updated, err := SeparateOutdatedFromUpdatedInstancesUsingLaunchTemplate(updatedLaunchTemplate, []*autoscaling.Instance{instance}, &mockEc2Svc{templates: []*ec2.LaunchTemplate{updatedEc2LaunchTemplate}})
+	outdated, updated, err := SeparateOutdatedFromUpdatedInstancesUsingLaunchTemplate(updatedLaunchTemplate, []*autoscaling.Instance{instance}, &MockEC2Service{templates: []*ec2.LaunchTemplate{updatedEc2LaunchTemplate}})
 	if err != nil {
 		t.Fatal("Shouldn't have returned an error, but returned:", err)
 	}
@@ -151,21 +150,19 @@ func createTestEc2Instance(id string) *ec2.Instance {
 	return instance
 }
 
-type mockEc2Svc struct {
+type MockEC2Service struct {
 	ec2iface.EC2API
 	templates []*ec2.LaunchTemplate
 }
 
-func (m *mockEc2Svc) DescribeLaunchTemplates(in *ec2.DescribeLaunchTemplatesInput) (*ec2.DescribeLaunchTemplatesOutput, error) {
-	fmt.Println(in)
-	fmt.Println(m.templates)
+func (m *MockEC2Service) DescribeLaunchTemplates(in *ec2.DescribeLaunchTemplatesInput) (*ec2.DescribeLaunchTemplatesOutput, error) {
 	output := &ec2.DescribeLaunchTemplatesOutput{
 		LaunchTemplates: m.templates,
 	}
 	return output, nil
 }
 
-func (m *mockEc2Svc) DescribeLaunchTemplateByID(in *ec2.DescribeLaunchTemplatesInput) (*ec2.LaunchTemplate, error) {
+func (m *MockEC2Service) DescribeLaunchTemplateByID(in *ec2.DescribeLaunchTemplatesInput) (*ec2.LaunchTemplate, error) {
 	for _, template := range m.templates {
 		if template.LaunchTemplateId == in.LaunchTemplateIds[0] {
 			return template, nil
