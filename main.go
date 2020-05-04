@@ -31,8 +31,8 @@ func main() {
 		if err := run(ec2Service, autoScalingService); err != nil {
 			log.Printf("Error during execution: %s", err.Error())
 		}
-		log.Println("Sleeping for 10 seconds")
-		time.Sleep(10 * time.Second)
+		log.Println("Sleeping for 20 seconds")
+		time.Sleep(20 * time.Second)
 	}
 }
 
