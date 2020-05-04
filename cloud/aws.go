@@ -54,7 +54,7 @@ func DescribeLaunchTemplateByName(svc ec2iface.EC2API, name string) (*ec2.Launch
 
 func DescribeLaunchTemplate(svc ec2iface.EC2API, input *ec2.DescribeLaunchTemplatesInput) (*ec2.LaunchTemplate, error) {
 	templatesOutput, err := svc.DescribeLaunchTemplates(input)
-	descriptiveMsg := fmt.Sprintf("%v / %v", input.LaunchTemplateIds, input.LaunchTemplateNames)
+	descriptiveMsg := fmt.Sprintf("%v / %v", aws.StringValueSlice(input.LaunchTemplateIds), aws.StringValueSlice(input.LaunchTemplateNames))
 	if err != nil {
 		return nil, fmt.Errorf("unable to get description for Launch Templates %s: %v", descriptiveMsg, err)
 	}

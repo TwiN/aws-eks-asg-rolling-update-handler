@@ -22,8 +22,14 @@ func main() {
 	if err != nil {
 		log.Fatalf("Unable to initialize configuration: %s", err.Error())
 	}
+
+	ec2Service, autoScalingService, err := cloud.GetServices()
+	if err != nil {
+		log.Fatalf("Unable to create AWS services: %s", err.Error())
+	}
+
 	for {
-		if err := run(); err != nil {
+		if err := run(ec2Service, autoScalingService); err != nil {
 			log.Printf("Error during execution: %s", err.Error())
 		}
 		log.Println("Sleeping for 10 seconds")
@@ -31,18 +37,13 @@ func main() {
 	}
 }
 
-func run() error {
+func run(ec2Service ec2iface.EC2API, autoScalingService autoscalingiface.AutoScalingAPI) error {
 	cfg := config.Get()
 	client, err := k8s.CreateClientSet()
 	if err != nil {
 		return fmt.Errorf("unable to create Kubernetes client: %s", err.Error())
 	}
 	kubernetesClient := k8s.NewKubernetesClient(client)
-
-	ec2Service, autoScalingService, err := cloud.GetServices()
-	if err != nil {
-		return fmt.Errorf("unable to create AWS services: %s", err.Error())
-	}
 
 	autoScalingGroups, err := cloud.DescribeAutoScalingGroupsByNames(autoScalingService, cfg.AutoScalingGroupNames)
 	if err != nil {
