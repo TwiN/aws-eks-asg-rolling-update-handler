@@ -12,11 +12,11 @@ import (
 )
 
 var (
-	ErrCannotIncreaseDesiredCountAboveMax = errors.New("cannot incease ASG desired size above max ASG size")
+	ErrCannotIncreaseDesiredCountAboveMax = errors.New("cannot increase ASG desired size above max ASG size")
 )
 
-func GetServices() (ec2iface.EC2API, autoscalingiface.AutoScalingAPI, error) {
-	awsSession, err := session.NewSession(&aws.Config{Region: aws.String("us-west-2")})
+func GetServices(awsRegion string) (ec2iface.EC2API, autoscalingiface.AutoScalingAPI, error) {
+	awsSession, err := session.NewSession(&aws.Config{Region: aws.String(awsRegion)})
 	if err != nil {
 		return nil, nil, err
 	}

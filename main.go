@@ -22,7 +22,7 @@ func main() {
 		log.Fatalf("Unable to initialize configuration: %s", err.Error())
 	}
 
-	ec2Service, autoScalingService, err := cloud.GetServices()
+	ec2Service, autoScalingService, err := cloud.GetServices(config.Get().AwsRegion)
 	if err != nil {
 		log.Fatalf("Unable to create AWS services: %s", err.Error())
 	}
@@ -37,10 +37,8 @@ func main() {
 }
 
 func run(ec2Service ec2iface.EC2API, autoScalingService autoscalingiface.AutoScalingAPI) error {
+	log.Println("Starting execution")
 	cfg := config.Get()
-	if cfg.Debug {
-		log.Println("Starting execution")
-	}
 	client, err := k8s.CreateClientSet()
 	if err != nil {
 		return fmt.Errorf("unable to create Kubernetes client: %s", err.Error())
@@ -255,7 +253,7 @@ func getRollingUpdateTimestampsFromNode(node *v1.Node) (minutesSinceStarted int,
 
 func SeparateOutdatedFromUpdatedInstances(asg *autoscaling.Group, ec2Svc ec2iface.EC2API) ([]*autoscaling.Instance, []*autoscaling.Instance, error) {
 	if config.Get().Debug {
-		log.Printf("[%s] Trying to separate outdated from updated instances", aws.StringValue(asg.AutoScalingGroupName))
+		log.Printf("[%s] Separating outdated from updated instances", aws.StringValue(asg.AutoScalingGroupName))
 	}
 	targetLaunchConfiguration := asg.LaunchConfigurationName
 	targetLaunchTemplate := asg.LaunchTemplate
