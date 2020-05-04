@@ -36,7 +36,6 @@ func DescribeAutoScalingGroupsByNames(svc autoscalingiface.AutoScalingAPI, names
 }
 
 func DescribeLaunchTemplateByID(svc ec2iface.EC2API, id string) (*ec2.LaunchTemplate, error) {
-	log.Println("wat ", id)
 	input := &ec2.DescribeLaunchTemplatesInput{
 		LaunchTemplateIds: []*string{
 			aws.String(id),
