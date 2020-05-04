@@ -13,6 +13,7 @@ import (
 	"github.com/aws/aws-sdk-go/service/ec2/ec2iface"
 	"k8s.io/api/core/v1"
 	"log"
+	"os"
 	"time"
 )
 
@@ -61,8 +62,10 @@ func HandleRollingUpgrade(kubernetesClient k8s.KubernetesClientApi, ec2Service e
 			continue
 		}
 
-		//log.Printf("outdatedInstances: %v", outdatedInstances)
-		//log.Printf("updatedInstances: %v", updatedInstances)
+		if os.Getenv("DEBUG") == "true" {
+			log.Printf("[%s] outdatedInstances: %v", *autoScalingGroup.AutoScalingGroupName, outdatedInstances)
+			log.Printf("[%s] updatedInstances: %v", *autoScalingGroup.AutoScalingGroupName, updatedInstances)
+		}
 
 		// Get the updated and ready nodes from the list of updated instances
 		// This will be used to determine if the desired number of updated instances need to scale up or not
@@ -126,6 +129,8 @@ func HandleRollingUpgrade(kubernetesClient k8s.KubernetesClientApi, ec2Service e
 		if len(outdatedInstances) == 0 {
 			log.Printf("[%s] All instances are up to date", *autoScalingGroup.AutoScalingGroupName)
 			continue
+		} else {
+			log.Printf("[%s] outdated=%d; updated=%d; updatedAndReady=%d", *autoScalingGroup.AutoScalingGroupName, len(outdatedInstances), len(updatedInstances), len(updatedReadyNodes))
 		}
 
 		// XXX: this should be configurable (i.e. SLOW_ROLLING_UPDATE)
