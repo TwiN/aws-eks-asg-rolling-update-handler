@@ -106,6 +106,7 @@ func HandleRollingUpgrade(kubernetesClient k8s.KubernetesClientApi, ec2Service e
 						// If the annotation can't be parsed OR the taint was added after the rolling updated started,
 						// we need to remove that taint
 						if err != nil || taint.TimeAdded.Time.After(startedAt) {
+							log.Printf("[%s] EDGE-0001: Attempting to remove taint from updated node %s", *autoScalingGroup.AutoScalingGroupName, updatedNode.Name)
 							// Remove the taint
 							updatedNode.Spec.Taints = append(updatedNode.Spec.Taints[:i], updatedNode.Spec.Taints[i+1:]...)
 							// Remove the annotation
