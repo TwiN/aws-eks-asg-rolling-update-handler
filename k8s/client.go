@@ -6,6 +6,7 @@ import (
 	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
+	"log"
 	"time"
 )
 
@@ -84,7 +85,20 @@ func (k *KubernetesClient) Drain(nodeName string, ignoreDaemonSets, deleteLocalD
 		IgnoreDaemonsets:   ignoreDaemonSets,
 		GracePeriodSeconds: -1,
 		Force:              true,
+		Logger:             &drainLogger{NodeName: nodeName},
 		DeleteLocalData:    deleteLocalData,
 		Timeout:            3 * time.Minute,
 	})
+}
+
+type drainLogger struct {
+	NodeName string
+}
+
+func (l *drainLogger) Log(v ...interface{}) {
+	log.Println(fmt.Sprintf("[%s][DRAINER]", l.NodeName), fmt.Sprint(v...))
+}
+
+func (l *drainLogger) Logf(format string, v ...interface{}) {
+	log.Println(fmt.Sprintf("[%s][DRAINER]", l.NodeName), fmt.Sprintf(format, v...))
 }
