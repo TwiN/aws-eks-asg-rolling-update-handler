@@ -8,27 +8,38 @@ import (
 
 type MockKubernetesClient struct {
 	Counter map[string]int64
-	nodes   []v1.Node
-	pods    []v1.Pod
+	Nodes   map[string]v1.Node
+	Pods    map[string]v1.Pod
 }
 
 func NewMockKubernetesClient(nodes []v1.Node, pods []v1.Pod) *MockKubernetesClient {
-	return &MockKubernetesClient{
+	client := &MockKubernetesClient{
 		Counter: make(map[string]int64),
-		nodes:   nodes,
-		pods:    pods,
+		Nodes:   make(map[string]v1.Node),
+		Pods:    make(map[string]v1.Pod),
 	}
+	for _, node := range nodes {
+		client.Nodes[node.Name] = node
+	}
+	for _, pod := range pods {
+		client.Pods[pod.Name] = pod
+	}
+	return client
 }
 
 func (mock *MockKubernetesClient) GetNodes() ([]v1.Node, error) {
 	mock.Counter["GetNodes"]++
-	return mock.nodes, nil
+	var nodes []v1.Node
+	for _, node := range mock.Nodes {
+		nodes = append(nodes, node)
+	}
+	return nodes, nil
 }
 
 func (mock *MockKubernetesClient) GetPodsInNode(node string) ([]v1.Pod, error) {
 	mock.Counter["GetPodsInNode"]++
 	var pods []v1.Pod
-	for _, pod := range mock.pods {
+	for _, pod := range mock.Pods {
 		if pod.Spec.NodeName == node {
 			pods = append(pods, pod)
 		}
@@ -38,7 +49,7 @@ func (mock *MockKubernetesClient) GetPodsInNode(node string) ([]v1.Pod, error) {
 
 func (mock *MockKubernetesClient) GetNodeByHostName(hostName string) (*v1.Node, error) {
 	mock.Counter["GetNodeByHostName"]++
-	for _, node := range mock.nodes {
+	for _, node := range mock.Nodes {
 		// For the sake of simplicity, we'll just assume that the host name is the same as the node name
 		if node.Name == hostName {
 			return &node, nil
@@ -49,6 +60,7 @@ func (mock *MockKubernetesClient) GetNodeByHostName(hostName string) (*v1.Node, 
 
 func (mock *MockKubernetesClient) UpdateNode(node *v1.Node) error {
 	mock.Counter["UpdateNode"]++
+	mock.Nodes[node.Name] = *node
 	return nil
 }
 
@@ -68,6 +80,7 @@ func CreateTestNode(name string, allocatableCpu, allocatableMemory string) v1.No
 		},
 	}
 	node.SetName(name)
+	node.SetAnnotations(make(map[string]string))
 	return node
 }
 

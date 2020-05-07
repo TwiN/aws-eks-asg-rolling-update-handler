@@ -86,7 +86,11 @@ func HandleRollingUpgrade(kubernetesClient k8s.KubernetesClientApi, ec2Service e
 			log.Printf("[%s] outdated=%d; updated=%d; updatedAndReady=%d; asgCurrent=%d; asgDesired=%d; asgMax=%d", aws.StringValue(autoScalingGroup.AutoScalingGroupName), len(outdatedInstances), len(updatedInstances), len(updatedReadyNodes), len(autoScalingGroup.Instances), aws.Int64Value(autoScalingGroup.DesiredCapacity), aws.Int64Value(autoScalingGroup.MaxSize))
 		}
 
-		// XXX: this should be configurable (i.e. SLOW_ROLLING_UPDATE)
+		if int64(len(autoScalingGroup.Instances)) < aws.Int64Value(autoScalingGroup.DesiredCapacity) {
+			log.Printf("[%s] Skipping because ASG has a desired capacity of %d, but only has %d instances", aws.StringValue(autoScalingGroup.AutoScalingGroupName), aws.Int64Value(autoScalingGroup.DesiredCapacity), len(autoScalingGroup.Instances))
+			continue
+		}
+
 		if numberOfNonReadyNodesOrInstances != 0 {
 			log.Printf("[%s] ASG has %d non-ready updated nodes/instances, waiting until all nodes/instances are ready", aws.StringValue(autoScalingGroup.AutoScalingGroupName), numberOfNonReadyNodesOrInstances)
 			continue
@@ -109,12 +113,9 @@ func HandleRollingUpgrade(kubernetesClient k8s.KubernetesClientApi, ec2Service e
 				err := k8s.AnnotateNodeByHostName(kubernetesClient, aws.StringValue(outdatedInstance.InstanceId), k8s.RollingUpdateStartedTimestampAnnotationKey, time.Now().Format(time.RFC3339))
 				if err != nil {
 					log.Printf("[%s][%s] Unable to annotate node: %v", aws.StringValue(autoScalingGroup.AutoScalingGroupName), aws.StringValue(outdatedInstance.InstanceId), err.Error())
-					// XXX: should we really skip here?
 					log.Printf("[%s][%s] Skipping", aws.StringValue(autoScalingGroup.AutoScalingGroupName), aws.StringValue(outdatedInstance.InstanceId))
 					continue
 				}
-				// TODO: increase desired instance by 1 (to create a new updated instance)
-
 			} else {
 				log.Printf("[%s][%s] Node already started rollout process", aws.StringValue(autoScalingGroup.AutoScalingGroupName), aws.StringValue(outdatedInstance.InstanceId))
 				// check if existing updatedInstances have the capacity to support what's inside this node
@@ -129,6 +130,7 @@ func HandleRollingUpgrade(kubernetesClient k8s.KubernetesClientApi, ec2Service e
 							log.Printf("[%s][%s] Skipping", aws.StringValue(autoScalingGroup.AutoScalingGroupName), aws.StringValue(outdatedInstance.InstanceId))
 							continue
 						} else {
+							// Only annotate if no error was encountered
 							_ = k8s.AnnotateNodeByHostName(kubernetesClient, aws.StringValue(outdatedInstance.InstanceId), k8s.RollingUpdateDrainedTimestampAnnotationKey, time.Now().Format(time.RFC3339))
 						}
 					} else {
@@ -142,28 +144,33 @@ func HandleRollingUpgrade(kubernetesClient k8s.KubernetesClientApi, ec2Service e
 							log.Printf("[%s][%s] Ran into error while terminating node: %v", aws.StringValue(autoScalingGroup.AutoScalingGroupName), aws.StringValue(outdatedInstance.InstanceId), err.Error())
 							continue
 						} else {
+							// Only annotate if no error was encountered
 							_ = k8s.AnnotateNodeByHostName(kubernetesClient, aws.StringValue(outdatedInstance.InstanceId), k8s.RollingUpdateTerminatedTimestampAnnotationKey, time.Now().Format(time.RFC3339))
 						}
 					} else {
 						log.Printf("[%s][%s] Node is already in the process of being terminated since %d minutes ago, skipping", aws.StringValue(autoScalingGroup.AutoScalingGroupName), aws.StringValue(outdatedInstance.InstanceId), minutesSinceTerminated)
-						continue
 						// TODO: check if minutesSinceTerminated > 10. If that happens, then there's clearly a problem, so we should do something about it
+						// The node has already been terminated, there's nothing to do here, continue to the next one
+						continue
 					}
+					// If this code is reached, it means that the current node has been successfully drained and
+					// scheduled for termination.
+					// As a result, we return here to make sure that multiple old instances didn't use the same updated
+					// instances to calculate resources available
+					log.Printf("[%s][%s] Node has been drained and scheduled for termination successfully", aws.StringValue(autoScalingGroup.AutoScalingGroupName), aws.StringValue(outdatedInstance.InstanceId))
 					return
 				} else {
 					log.Printf("[%s][%s] Updated nodes do not have enough resources available, increasing desired count by 1", aws.StringValue(autoScalingGroup.AutoScalingGroupName), aws.StringValue(outdatedInstance.InstanceId))
 					// TODO: check if desired capacity matches (updatedInstances + outdatedInstances + 1)
-					err := cloud.SetAutoScalingGroupDesiredCount(autoScalingService, autoScalingGroup, *autoScalingGroup.DesiredCapacity+1)
+					err := cloud.SetAutoScalingGroupDesiredCount(autoScalingService, autoScalingGroup, aws.Int64Value(autoScalingGroup.DesiredCapacity)+1)
 					if err != nil {
 						log.Printf("[%s][%s] Unable to increase ASG desired size: %v", aws.StringValue(autoScalingGroup.AutoScalingGroupName), aws.StringValue(outdatedInstance.InstanceId), err.Error())
 						log.Printf("[%s][%s] Skipping", aws.StringValue(autoScalingGroup.AutoScalingGroupName), aws.StringValue(outdatedInstance.InstanceId))
 						continue
 					}
-					return
 				}
 			}
 		}
-		// TODO: Check if ASG hit max, and then decide what to do (patience or violence)
 	}
 }
 
@@ -171,20 +178,23 @@ func getReadyNodesAndNumberOfNonReadyNodesOrInstances(updatedInstances []*autosc
 	var updatedReadyNodes []*v1.Node
 	numberOfNonReadyNodesOrInstances := 0
 	for _, updatedInstance := range updatedInstances {
-		if *updatedInstance.LifecycleState != "InService" {
+		if aws.StringValue(updatedInstance.LifecycleState) != "InService" {
 			numberOfNonReadyNodesOrInstances++
 			log.Printf("[%s][%s] Skipping because instance is not in LifecycleState 'InService', but is in '%s' instead", aws.StringValue(autoScalingGroup.AutoScalingGroupName), aws.StringValue(updatedInstance.InstanceId), aws.StringValue(updatedInstance.LifecycleState))
 			continue
 		}
 		updatedNode, err := kubernetesClient.GetNodeByHostName(aws.StringValue(updatedInstance.InstanceId))
 		if err != nil {
-			log.Printf("[%s][%s] Unable to get updated node from Kubernetes: %v", aws.StringValue(autoScalingGroup.AutoScalingGroupName), aws.StringValue(updatedInstance.InstanceId), err.Error())
-			log.Printf("[%s][%s] Skipping", aws.StringValue(autoScalingGroup.AutoScalingGroupName), aws.StringValue(updatedInstance.InstanceId))
+			numberOfNonReadyNodesOrInstances++
+			log.Printf("[%s][%s] Skipping because unable to get updated node from Kubernetes: %v", aws.StringValue(autoScalingGroup.AutoScalingGroupName), aws.StringValue(updatedInstance.InstanceId), err.Error())
 			continue
 		}
 		// Check if Kubelet is ready to accept pods on that node
 		conditions := updatedNode.Status.Conditions
-		if kubeletCondition := conditions[len(conditions)-1]; kubeletCondition.Type == v1.NodeReady && kubeletCondition.Status == v1.ConditionTrue {
+		if len(conditions) == 0 {
+			log.Printf("[%s][%s] For some magical reason, %s doesn't have any conditions, therefore it is impossible to determine whether the node is ready to accept new pods or not", aws.StringValue(autoScalingGroup.AutoScalingGroupName), aws.StringValue(updatedInstance.InstanceId), updatedNode.Name)
+			numberOfNonReadyNodesOrInstances++
+		} else if kubeletCondition := conditions[len(conditions)-1]; kubeletCondition.Type == v1.NodeReady && kubeletCondition.Status == v1.ConditionTrue {
 			updatedReadyNodes = append(updatedReadyNodes, updatedNode)
 		} else {
 			numberOfNonReadyNodesOrInstances++
@@ -264,7 +274,9 @@ func SeparateOutdatedFromUpdatedInstances(asg *autoscaling.Group, ec2Svc ec2ifac
 	targetLaunchConfiguration := asg.LaunchConfigurationName
 	targetLaunchTemplate := asg.LaunchTemplate
 	if targetLaunchTemplate == nil && asg.MixedInstancesPolicy != nil && asg.MixedInstancesPolicy.LaunchTemplate != nil {
-		log.Printf("[%s] using mixed instances policy launch template", aws.StringValue(asg.AutoScalingGroupName))
+		if config.Get().Debug {
+			log.Printf("[%s] using mixed instances policy launch template", aws.StringValue(asg.AutoScalingGroupName))
+		}
 		targetLaunchTemplate = asg.MixedInstancesPolicy.LaunchTemplate.LaunchTemplateSpecification
 	}
 	if targetLaunchTemplate != nil {
@@ -283,13 +295,13 @@ func SeparateOutdatedFromUpdatedInstancesUsingLaunchTemplate(targetLaunchTemplat
 		err            error
 	)
 	switch {
-	case targetLaunchTemplate.LaunchTemplateId != nil && *targetLaunchTemplate.LaunchTemplateId != "":
-		if targetTemplate, err = cloud.DescribeLaunchTemplateByID(ec2Svc, *targetLaunchTemplate.LaunchTemplateId); err != nil {
-			return nil, nil, fmt.Errorf("error retrieving information about launch template %s: %v", *targetLaunchTemplate.LaunchTemplateId, err)
+	case targetLaunchTemplate.LaunchTemplateId != nil && aws.StringValue(targetLaunchTemplate.LaunchTemplateId) != "":
+		if targetTemplate, err = cloud.DescribeLaunchTemplateByID(ec2Svc, aws.StringValue(targetLaunchTemplate.LaunchTemplateId)); err != nil {
+			return nil, nil, fmt.Errorf("error retrieving information about launch template %s: %v", aws.StringValue(targetLaunchTemplate.LaunchTemplateId), err)
 		}
-	case targetLaunchTemplate.LaunchTemplateName != nil && *targetLaunchTemplate.LaunchTemplateName != "":
-		if targetTemplate, err = cloud.DescribeLaunchTemplateByName(ec2Svc, *targetLaunchTemplate.LaunchTemplateName); err != nil {
-			return nil, nil, fmt.Errorf("error retrieving information about launch template name %s: %v", *targetLaunchTemplate.LaunchTemplateName, err)
+	case targetLaunchTemplate.LaunchTemplateName != nil && aws.StringValue(targetLaunchTemplate.LaunchTemplateName) != "":
+		if targetTemplate, err = cloud.DescribeLaunchTemplateByName(ec2Svc, aws.StringValue(targetLaunchTemplate.LaunchTemplateName)); err != nil {
+			return nil, nil, fmt.Errorf("error retrieving information about launch template name %s: %v", aws.StringValue(targetLaunchTemplate.LaunchTemplateName), err)
 		}
 	default:
 		return nil, nil, fmt.Errorf("invalid launch template name")
