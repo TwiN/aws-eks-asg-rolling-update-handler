@@ -77,61 +77,7 @@ func HandleRollingUpgrade(kubernetesClient k8s.KubernetesClientApi, ec2Service e
 		// Get the updated and ready nodes from the list of updated instances
 		// This will be used to determine if the desired number of updated instances need to scale up or not
 		// We also use this to clean up, if necessary
-		var updatedReadyNodes []*v1.Node
-		numberOfNonReadyNodesOrInstances := 0
-		for _, updatedInstance := range updatedInstances {
-			if *updatedInstance.LifecycleState != "InService" {
-				numberOfNonReadyNodesOrInstances++
-				log.Printf("[%s][%s] Skipping because instance is not in LifecycleState 'InService', but is in '%s' instead", aws.StringValue(autoScalingGroup.AutoScalingGroupName), aws.StringValue(updatedInstance.InstanceId), aws.StringValue(updatedInstance.LifecycleState))
-				continue
-			}
-			updatedNode, err := kubernetesClient.GetNodeByHostName(aws.StringValue(updatedInstance.InstanceId))
-			if err != nil {
-				log.Printf("[%s][%s] Unable to get updated node from Kubernetes: %v", aws.StringValue(autoScalingGroup.AutoScalingGroupName), aws.StringValue(updatedInstance.InstanceId), err.Error())
-				log.Printf("[%s][%s] Skipping", aws.StringValue(autoScalingGroup.AutoScalingGroupName), aws.StringValue(updatedInstance.InstanceId))
-				continue
-			}
-			// Check if Kubelet is ready to accept pods on that node
-			conditions := updatedNode.Status.Conditions
-			if kubeletCondition := conditions[len(conditions)-1]; kubeletCondition.Type == v1.NodeReady && kubeletCondition.Status == v1.ConditionTrue {
-				updatedReadyNodes = append(updatedReadyNodes, updatedNode)
-			} else {
-				numberOfNonReadyNodesOrInstances++
-			}
-			// Cleaning up
-			// This is an edge case, but it may happen that an ASG's launch template is modified, creating a new
-			// template version, but then that new template version is deleted before the node has been terminated.
-			// To make it even more of an edge case, the draining function would've had to time out, meaning that
-			// the termination would be skipped until the next run.
-			// This would cause an instance to be considered as updated, even though it has been drained therefore
-			// cordoned (NoSchedule).
-			if startedAtValue, ok := updatedNode.Annotations[k8s.RollingUpdateStartedTimestampAnnotationKey]; ok {
-				// An updated node should never have k8s.RollingUpdateStartedTimestampAnnotationKey, so this indicates that
-				// at one point, this node was considered old compared to the ASG's current LT/LC
-				// First, check if there's a NoSchedule taint
-				for i, taint := range updatedNode.Spec.Taints {
-					if taint.Effect == v1.TaintEffectNoSchedule {
-						// There's a taint, but we need to make sure it was added after the rolling update started
-						startedAt, err := time.Parse(time.RFC3339, startedAtValue)
-						// If the annotation can't be parsed OR the taint was added after the rolling updated started,
-						// we need to remove that taint
-						if err != nil || taint.TimeAdded.Time.After(startedAt) {
-							log.Printf("[%s] EDGE-0001: Attempting to remove taint from updated node %s", aws.StringValue(autoScalingGroup.AutoScalingGroupName), updatedNode.Name)
-							// Remove the taint
-							updatedNode.Spec.Taints = append(updatedNode.Spec.Taints[:i], updatedNode.Spec.Taints[i+1:]...)
-							// Remove the annotation
-							delete(updatedNode.Annotations, k8s.RollingUpdateStartedTimestampAnnotationKey)
-							// Update the node
-							err = kubernetesClient.UpdateNode(updatedNode)
-							if err != nil {
-								log.Printf("[%s] EDGE-0001: Unable to update tainted node %s: %v", aws.StringValue(autoScalingGroup.AutoScalingGroupName), updatedNode.Name, err.Error())
-							}
-							break
-						}
-					}
-				}
-			}
-		}
+		updatedReadyNodes, numberOfNonReadyNodesOrInstances := getReadyNodesAndNumberOfNonReadyNodesOrInstances(updatedInstances, autoScalingGroup, kubernetesClient)
 
 		if len(outdatedInstances) == 0 {
 			log.Printf("[%s] All instances are up to date", aws.StringValue(autoScalingGroup.AutoScalingGroupName))
@@ -219,6 +165,65 @@ func HandleRollingUpgrade(kubernetesClient k8s.KubernetesClientApi, ec2Service e
 		}
 		// TODO: Check if ASG hit max, and then decide what to do (patience or violence)
 	}
+}
+
+func getReadyNodesAndNumberOfNonReadyNodesOrInstances(updatedInstances []*autoscaling.Instance, autoScalingGroup *autoscaling.Group, kubernetesClient k8s.KubernetesClientApi) ([]*v1.Node, int) {
+	var updatedReadyNodes []*v1.Node
+	numberOfNonReadyNodesOrInstances := 0
+	for _, updatedInstance := range updatedInstances {
+		if *updatedInstance.LifecycleState != "InService" {
+			numberOfNonReadyNodesOrInstances++
+			log.Printf("[%s][%s] Skipping because instance is not in LifecycleState 'InService', but is in '%s' instead", aws.StringValue(autoScalingGroup.AutoScalingGroupName), aws.StringValue(updatedInstance.InstanceId), aws.StringValue(updatedInstance.LifecycleState))
+			continue
+		}
+		updatedNode, err := kubernetesClient.GetNodeByHostName(aws.StringValue(updatedInstance.InstanceId))
+		if err != nil {
+			log.Printf("[%s][%s] Unable to get updated node from Kubernetes: %v", aws.StringValue(autoScalingGroup.AutoScalingGroupName), aws.StringValue(updatedInstance.InstanceId), err.Error())
+			log.Printf("[%s][%s] Skipping", aws.StringValue(autoScalingGroup.AutoScalingGroupName), aws.StringValue(updatedInstance.InstanceId))
+			continue
+		}
+		// Check if Kubelet is ready to accept pods on that node
+		conditions := updatedNode.Status.Conditions
+		if kubeletCondition := conditions[len(conditions)-1]; kubeletCondition.Type == v1.NodeReady && kubeletCondition.Status == v1.ConditionTrue {
+			updatedReadyNodes = append(updatedReadyNodes, updatedNode)
+		} else {
+			numberOfNonReadyNodesOrInstances++
+		}
+		// Cleaning up
+		// This is an edge case, but it may happen that an ASG's launch template is modified, creating a new
+		// template version, but then that new template version is deleted before the node has been terminated.
+		// To make it even more of an edge case, the draining function would've had to time out, meaning that
+		// the termination would be skipped until the next run.
+		// This would cause an instance to be considered as updated, even though it has been drained therefore
+		// cordoned (NoSchedule).
+		if startedAtValue, ok := updatedNode.Annotations[k8s.RollingUpdateStartedTimestampAnnotationKey]; ok {
+			// An updated node should never have k8s.RollingUpdateStartedTimestampAnnotationKey, so this indicates that
+			// at one point, this node was considered old compared to the ASG's current LT/LC
+			// First, check if there's a NoSchedule taint
+			for i, taint := range updatedNode.Spec.Taints {
+				if taint.Effect == v1.TaintEffectNoSchedule {
+					// There's a taint, but we need to make sure it was added after the rolling update started
+					startedAt, err := time.Parse(time.RFC3339, startedAtValue)
+					// If the annotation can't be parsed OR the taint was added after the rolling updated started,
+					// we need to remove that taint
+					if err != nil || taint.TimeAdded.Time.After(startedAt) {
+						log.Printf("[%s] EDGE-0001: Attempting to remove taint from updated node %s", aws.StringValue(autoScalingGroup.AutoScalingGroupName), updatedNode.Name)
+						// Remove the taint
+						updatedNode.Spec.Taints = append(updatedNode.Spec.Taints[:i], updatedNode.Spec.Taints[i+1:]...)
+						// Remove the annotation
+						delete(updatedNode.Annotations, k8s.RollingUpdateStartedTimestampAnnotationKey)
+						// Update the node
+						err = kubernetesClient.UpdateNode(updatedNode)
+						if err != nil {
+							log.Printf("[%s] EDGE-0001: Unable to update tainted node %s: %v", aws.StringValue(autoScalingGroup.AutoScalingGroupName), updatedNode.Name, err.Error())
+						}
+						break
+					}
+				}
+			}
+		}
+	}
+	return updatedReadyNodes, numberOfNonReadyNodesOrInstances
 }
 
 func getRollingUpdateTimestampsFromNode(node *v1.Node) (minutesSinceStarted int, minutesSinceDrained int, minutesSinceTerminated int) {
