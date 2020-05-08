@@ -21,12 +21,10 @@ func main() {
 	if err != nil {
 		log.Fatalf("Unable to initialize configuration: %s", err.Error())
 	}
-
 	ec2Service, autoScalingService, err := cloud.GetServices(config.Get().AwsRegion)
 	if err != nil {
 		log.Fatalf("Unable to create AWS services: %s", err.Error())
 	}
-
 	for {
 		if err := run(ec2Service, autoScalingService); err != nil {
 			log.Printf("Error during execution: %s", err.Error())
@@ -47,7 +45,6 @@ func run(ec2Service ec2iface.EC2API, autoScalingService autoscalingiface.AutoSca
 	if cfg.Debug {
 		log.Println("Created Kubernetes Client successfully")
 	}
-
 	autoScalingGroups, err := cloud.DescribeAutoScalingGroupsByNames(autoScalingService, cfg.AutoScalingGroupNames)
 	if err != nil {
 		return fmt.Errorf("unable to describe AutoScalingGroups: %s", err.Error())
@@ -55,7 +52,6 @@ func run(ec2Service ec2iface.EC2API, autoScalingService autoscalingiface.AutoSca
 	if cfg.Debug {
 		log.Println("Described AutoScalingGroups successfully")
 	}
-
 	HandleRollingUpgrade(kubernetesClient, ec2Service, autoScalingService, autoScalingGroups)
 	return nil
 }
@@ -68,7 +64,6 @@ func HandleRollingUpgrade(kubernetesClient k8s.KubernetesClientApi, ec2Service e
 			log.Printf("[%s] Skipping", aws.StringValue(autoScalingGroup.AutoScalingGroupName))
 			continue
 		}
-
 		if config.Get().Debug {
 			log.Printf("[%s] outdatedInstances: %v", aws.StringValue(autoScalingGroup.AutoScalingGroupName), outdatedInstances)
 			log.Printf("[%s] updatedInstances: %v", aws.StringValue(autoScalingGroup.AutoScalingGroupName), updatedInstances)
@@ -160,8 +155,11 @@ func HandleRollingUpgrade(kubernetesClient k8s.KubernetesClientApi, ec2Service e
 					log.Printf("[%s][%s] Node has been drained and scheduled for termination successfully", aws.StringValue(autoScalingGroup.AutoScalingGroupName), aws.StringValue(outdatedInstance.InstanceId))
 					return
 				} else {
+					// Don't increase the ASG if the node has already been drained or scheduled for termination
+					if minutesSinceDrained != -1 || minutesSinceTerminated != -1 {
+						continue
+					}
 					log.Printf("[%s][%s] Updated nodes do not have enough resources available, increasing desired count by 1", aws.StringValue(autoScalingGroup.AutoScalingGroupName), aws.StringValue(outdatedInstance.InstanceId))
-					// TODO: check if desired capacity matches (updatedInstances + outdatedInstances + 1)
 					err := cloud.SetAutoScalingGroupDesiredCount(autoScalingService, autoScalingGroup, aws.Int64Value(autoScalingGroup.DesiredCapacity)+1)
 					if err != nil {
 						log.Printf("[%s][%s] Unable to increase ASG desired size: %v", aws.StringValue(autoScalingGroup.AutoScalingGroupName), aws.StringValue(outdatedInstance.InstanceId), err.Error())
