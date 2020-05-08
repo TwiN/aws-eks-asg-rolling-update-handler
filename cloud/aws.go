@@ -80,10 +80,10 @@ func SetAutoScalingGroupDesiredCount(svc autoscalingiface.AutoScalingAPI, asg *a
 	return nil
 }
 
-func TerminateEc2Instance(svc autoscalingiface.AutoScalingAPI, instance *autoscaling.Instance) error {
+func TerminateEc2Instance(svc autoscalingiface.AutoScalingAPI, instance *autoscaling.Instance, shouldDecrementDesiredCapacity bool) error {
 	_, err := svc.TerminateInstanceInAutoScalingGroup(&autoscaling.TerminateInstanceInAutoScalingGroupInput{
 		InstanceId:                     instance.InstanceId,
-		ShouldDecrementDesiredCapacity: aws.Bool(true),
+		ShouldDecrementDesiredCapacity: aws.Bool(shouldDecrementDesiredCapacity),
 	})
 	return err
 }

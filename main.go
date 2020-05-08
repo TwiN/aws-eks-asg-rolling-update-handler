@@ -130,7 +130,8 @@ func HandleRollingUpgrade(kubernetesClient k8s.KubernetesClientApi, ec2Service e
 					if minutesSinceTerminated == -1 {
 						// Terminate node
 						log.Printf("[%s][%s] Terminating node", aws.StringValue(autoScalingGroup.AutoScalingGroupName), aws.StringValue(outdatedInstance.InstanceId))
-						err = cloud.TerminateEc2Instance(autoScalingService, outdatedInstance)
+						shouldDecrementDesiredCapacity := aws.Int64Value(autoScalingGroup.DesiredCapacity) != aws.Int64Value(autoScalingGroup.MinSize)
+						err = cloud.TerminateEc2Instance(autoScalingService, outdatedInstance, shouldDecrementDesiredCapacity)
 						if err != nil {
 							log.Printf("[%s][%s] Ran into error while terminating node: %v", aws.StringValue(autoScalingGroup.AutoScalingGroupName), aws.StringValue(outdatedInstance.InstanceId), err.Error())
 							continue
