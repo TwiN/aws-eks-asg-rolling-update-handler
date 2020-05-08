@@ -6,10 +6,6 @@ import (
 )
 
 func CheckIfNodeHasEnoughResourcesToTransferAllPodsInNodes(kubernetesClient KubernetesClientApi, oldNode *v1.Node, targetNodes []*v1.Node) bool {
-	// If there's no target nodes, then there's definitely not enough resources available
-	if len(targetNodes) == 0 {
-		return false
-	}
 	totalAvailableTargetCpu := int64(0)
 	totalAvailableTargetMemory := int64(0)
 	// Get resources available in target nodes
@@ -69,7 +65,7 @@ func CheckIfNodeHasEnoughResourcesToTransferAllPodsInNodes(kubernetesClient Kube
 	}
 	leftOverCpu := totalAvailableTargetCpu - cpuNeeded
 	leftOverMemory := totalAvailableTargetMemory - memoryNeeded
-	return leftOverCpu > 0 && leftOverMemory > 0
+	return leftOverCpu >= 0 && leftOverMemory >= 0
 }
 
 func AnnotateNodeByHostName(kubernetesClient KubernetesClientApi, hostName, key, value string) error {

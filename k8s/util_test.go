@@ -106,7 +106,15 @@ func TestCheckIfNodeHasEnoughResourcesToTransferAllPodsInNodes_withNoTargetNodes
 	if hasEnoughResources {
 		t.Error("there's no target nodes; there definitely shouldn't have been enough space")
 	}
-	if mockKubernetesClient.Counter["GetPodsInNode"] != 0 {
-		t.Error("GetPodInNode shouldn't have been called")
+}
+
+func TestCheckIfNodeHasEnoughResourcesToTransferAllPodsInNodes_withNoTargetNodesButOldNodeOnlyHasPodsFromDaemonSets(t *testing.T) {
+	oldNode := k8stest.CreateTestNode("old-node", "0m", "0m")
+	oldNodePod := k8stest.CreateTestPod("old-node-pod-1", oldNode.Name, "500Mi", "500Mi", true)
+	mockKubernetesClient := k8stest.NewMockKubernetesClient([]v1.Node{oldNode}, []v1.Pod{oldNodePod})
+
+	hasEnoughResources := CheckIfNodeHasEnoughResourcesToTransferAllPodsInNodes(mockKubernetesClient, &oldNode, []*v1.Node{})
+	if !hasEnoughResources {
+		t.Error("there's no target nodes, but the only pods in the old node are from daemon sets")
 	}
 }
