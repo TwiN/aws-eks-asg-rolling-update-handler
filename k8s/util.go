@@ -45,6 +45,17 @@ func CheckIfNodeHasEnoughResourcesToTransferAllPodsInNodes(kubernetesClient Kube
 		return true
 	}
 	for _, podInNode := range podsInNode {
+		// Ignore DaemonSets in the old node, because these pods will also be present in the target nodes
+		hasDaemonSetOwnerReference := false
+		for _, owner := range podInNode.GetOwnerReferences() {
+			if owner.Kind == "DaemonSet" {
+				hasDaemonSetOwnerReference = true
+				break
+			}
+		}
+		if hasDaemonSetOwnerReference {
+			continue
+		}
 		for _, container := range podInNode.Spec.Containers {
 			if container.Resources.Requests.Cpu() != nil {
 				// Subtract the cpu request of the pod from the node's total allocatable

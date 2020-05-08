@@ -4,6 +4,7 @@ import (
 	"errors"
 	"k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 type MockKubernetesClient struct {
@@ -84,7 +85,7 @@ func CreateTestNode(name string, allocatableCpu, allocatableMemory string) v1.No
 	return node
 }
 
-func CreateTestPod(name string, nodeName, cpuRequest, cpuMemory string) v1.Pod {
+func CreateTestPod(name, nodeName, cpuRequest, cpuMemory string, isDaemonSet bool) v1.Pod {
 	pod := v1.Pod{
 		Spec: v1.PodSpec{
 			NodeName: nodeName,
@@ -100,5 +101,10 @@ func CreateTestPod(name string, nodeName, cpuRequest, cpuMemory string) v1.Pod {
 		},
 	}
 	pod.SetName(name)
+	if isDaemonSet {
+		pod.SetOwnerReferences([]metav1.OwnerReference{{Kind: "DaemonSet"}})
+	} else {
+		pod.SetOwnerReferences([]metav1.OwnerReference{{Kind: "ReplicaSet"}})
+	}
 	return pod
 }
