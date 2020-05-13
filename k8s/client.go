@@ -11,11 +11,12 @@ import (
 )
 
 const (
-	ScaleDownDisabledAnnotationKey                = "cluster-autoscaler.kubernetes.io/scale-down-disabled"
-	RollingUpdateStartedTimestampAnnotationKey    = "aws-eks-asg-rolling-update-handler/started-at"
-	RollingUpdateDrainedTimestampAnnotationKey    = "aws-eks-asg-rolling-update-handler/drained-at"
-	RollingUpdateTerminatedTimestampAnnotationKey = "aws-eks-asg-rolling-update-handler/terminated-at"
-	HostNameAnnotationKey                         = "kubernetes.io/hostname"
+	ScaleDownDisabledAnnotationKey                     = "cluster-autoscaler.kubernetes.io/scale-down-disabled"
+	RollingUpdateStartedTimestampAnnotationKey         = "aws-eks-asg-rolling-update-handler/started-at"
+	RollingUpdateDrainedTimestampAnnotationKey         = "aws-eks-asg-rolling-update-handler/drained-at"
+	RollingUpdateTerminatedTimestampAnnotationKey      = "aws-eks-asg-rolling-update-handler/terminated-at"
+	RollingUpdateAsgMaxIncreasedTimestampAnnotationKey = "aws-eks-asg-rolling-update-handler/asg-max-increased-at"
+	HostNameAnnotationKey                              = "kubernetes.io/hostname"
 )
 
 type KubernetesClientApi interface {

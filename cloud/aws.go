@@ -64,9 +64,12 @@ func DescribeLaunchTemplate(svc ec2iface.EC2API, input *ec2.DescribeLaunchTempla
 	return templatesOutput.LaunchTemplates[0], nil
 }
 
-func SetAutoScalingGroupDesiredCount(svc autoscalingiface.AutoScalingAPI, asg *autoscaling.Group, count int64) error {
+func SetAutoScalingGroupDesiredCount(svc autoscalingiface.AutoScalingAPI, asg *autoscaling.Group, count int64, canIncreaseAutoScalingGroupMax bool) error {
 	if count > aws.Int64Value(asg.MaxSize) {
 		return ErrCannotIncreaseDesiredCountAboveMax
+	}
+	if canIncreaseAutoScalingGroupMax {
+		// TODO
 	}
 	desiredInput := &autoscaling.SetDesiredCapacityInput{
 		AutoScalingGroupName: asg.AutoScalingGroupName,

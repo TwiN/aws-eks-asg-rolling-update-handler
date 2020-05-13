@@ -100,13 +100,13 @@ func (m *MockAutoScalingService) UpdateAutoScalingGroup(_ *autoscaling.UpdateAut
 	return &autoscaling.UpdateAutoScalingGroupOutput{}, nil
 }
 
-func CreateTestAutoScalingGroup(name, launchConfigurationName string, launchTemplateSpecification *autoscaling.LaunchTemplateSpecification, instances []*autoscaling.Instance) *autoscaling.Group {
+func CreateTestAutoScalingGroup(name, launchConfigurationName string, launchTemplateSpecification *autoscaling.LaunchTemplateSpecification, instances []*autoscaling.Instance, min, max int) *autoscaling.Group {
 	asg := &autoscaling.Group{
 		AutoScalingGroupName: aws.String(name),
 		Instances:            instances,
 		DesiredCapacity:      aws.Int64(int64(len(instances))),
-		MinSize:              aws.Int64(0),
-		MaxSize:              aws.Int64(999),
+		MinSize:              aws.Int64(int64(min)),
+		MaxSize:              aws.Int64(int64(max)),
 	}
 	if len(launchConfigurationName) != 0 {
 		asg.SetLaunchConfigurationName(launchConfigurationName)
