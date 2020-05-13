@@ -100,7 +100,7 @@ func (m *MockAutoScalingService) UpdateAutoScalingGroup(_ *autoscaling.UpdateAut
 	return &autoscaling.UpdateAutoScalingGroupOutput{}, nil
 }
 
-func CreateTestAutoScalingGroup(name, launchConfigurationName string, launchTemplateSpecification *autoscaling.LaunchTemplateSpecification, instances []*autoscaling.Instance) *autoscaling.Group {
+func CreateTestAutoScalingGroup(name, launchConfigurationName string, launchTemplateSpecification *autoscaling.LaunchTemplateSpecification, instances []*autoscaling.Instance, withMixedInstancesPolicy bool) *autoscaling.Group {
 	asg := &autoscaling.Group{
 		AutoScalingGroupName: aws.String(name),
 		Instances:            instances,
@@ -111,8 +111,21 @@ func CreateTestAutoScalingGroup(name, launchConfigurationName string, launchTemp
 	if len(launchConfigurationName) != 0 {
 		asg.SetLaunchConfigurationName(launchConfigurationName)
 	}
-	if launchTemplateSpecification != nil {
-		asg.SetLaunchTemplate(launchTemplateSpecification)
+	if withMixedInstancesPolicy {
+		asg.SetMixedInstancesPolicy(&autoscaling.MixedInstancesPolicy{
+			LaunchTemplate: &autoscaling.LaunchTemplate{
+				LaunchTemplateSpecification: launchTemplateSpecification,
+				Overrides: []*autoscaling.LaunchTemplateOverrides{
+					{InstanceType: aws.String("c5.2xlarge")},
+					{InstanceType: aws.String("c5n.2xlarge")},
+					{InstanceType: aws.String("c5d.2xlarge")},
+				},
+			},
+		})
+	} else {
+		if launchTemplateSpecification != nil {
+			asg.SetLaunchTemplate(launchTemplateSpecification)
+		}
 	}
 	return asg
 }
@@ -121,6 +134,7 @@ func CreateTestAutoScalingInstance(id, launchConfigurationName string, launchTem
 	instance := &autoscaling.Instance{
 		LifecycleState: aws.String(lifeCycleState),
 		InstanceId:     aws.String(id),
+		InstanceType:   aws.String("c5.2xlarge"),
 	}
 	if len(launchConfigurationName) != 0 {
 		instance.SetLaunchConfigurationName(launchConfigurationName)

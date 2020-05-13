@@ -272,21 +272,23 @@ func SeparateOutdatedFromUpdatedInstances(asg *autoscaling.Group, ec2Svc ec2ifac
 	}
 	targetLaunchConfiguration := asg.LaunchConfigurationName
 	targetLaunchTemplate := asg.LaunchTemplate
+	var targetLaunchTemplateOverrides []*autoscaling.LaunchTemplateOverrides
 	if targetLaunchTemplate == nil && asg.MixedInstancesPolicy != nil && asg.MixedInstancesPolicy.LaunchTemplate != nil {
 		if config.Get().Debug {
 			log.Printf("[%s] using mixed instances policy launch template", aws.StringValue(asg.AutoScalingGroupName))
 		}
 		targetLaunchTemplate = asg.MixedInstancesPolicy.LaunchTemplate.LaunchTemplateSpecification
+		targetLaunchTemplateOverrides = asg.MixedInstancesPolicy.LaunchTemplate.Overrides
 	}
 	if targetLaunchTemplate != nil {
-		return SeparateOutdatedFromUpdatedInstancesUsingLaunchTemplate(targetLaunchTemplate, asg.Instances, ec2Svc)
+		return SeparateOutdatedFromUpdatedInstancesUsingLaunchTemplate(targetLaunchTemplate, targetLaunchTemplateOverrides, asg.Instances, ec2Svc)
 	} else if targetLaunchConfiguration != nil {
 		return SeparateOutdatedFromUpdatedInstancesUsingLaunchConfiguration(targetLaunchConfiguration, asg.Instances)
 	}
 	return nil, nil, errors.New("AutoScalingGroup has neither launch template nor launch configuration")
 }
 
-func SeparateOutdatedFromUpdatedInstancesUsingLaunchTemplate(targetLaunchTemplate *autoscaling.LaunchTemplateSpecification, instances []*autoscaling.Instance, ec2Svc ec2iface.EC2API) ([]*autoscaling.Instance, []*autoscaling.Instance, error) {
+func SeparateOutdatedFromUpdatedInstancesUsingLaunchTemplate(targetLaunchTemplate *autoscaling.LaunchTemplateSpecification, overrides []*autoscaling.LaunchTemplateOverrides, instances []*autoscaling.Instance, ec2Svc ec2iface.EC2API) ([]*autoscaling.Instance, []*autoscaling.Instance, error) {
 	var (
 		oldInstances   []*autoscaling.Instance
 		newInstances   []*autoscaling.Instance
@@ -319,12 +321,23 @@ func SeparateOutdatedFromUpdatedInstancesUsingLaunchTemplate(targetLaunchTemplat
 		case aws.StringValue(instance.LaunchTemplate.LaunchTemplateId) != aws.StringValue(targetLaunchTemplate.LaunchTemplateId):
 			fallthrough
 		case !compareLaunchTemplateVersions(targetTemplate, targetLaunchTemplate, instance.LaunchTemplate):
+			fallthrough
+		case overrides != nil && len(overrides) > 0 && !isInstanceTypePartOfLaunchTemplateOverrides(overrides, instance.InstanceType):
 			oldInstances = append(oldInstances, instance)
 		default:
 			newInstances = append(newInstances, instance)
 		}
 	}
 	return oldInstances, newInstances, nil
+}
+
+func isInstanceTypePartOfLaunchTemplateOverrides(overrides []*autoscaling.LaunchTemplateOverrides, instanceType *string) bool {
+	for _, override := range overrides {
+		if aws.StringValue(override.InstanceType) == aws.StringValue(instanceType) {
+			return true
+		}
+	}
+	return false
 }
 
 func SeparateOutdatedFromUpdatedInstancesUsingLaunchConfiguration(targetLaunchConfigurationName *string, instances []*autoscaling.Instance) ([]*autoscaling.Instance, []*autoscaling.Instance, error) {
