@@ -20,6 +20,17 @@ be spun up before draining the old nodes. This is much better, because simply us
 completely useless in the event that the ASG's update on the launch configuration/template is a change of instance type.
 
 
+## Behavior
+
+On interval, this application:
+1. Iterates over each ASG defined by the `AUTO_SCALING_GROUP_NAMES` environment variable
+2. Iterates over each instances of each ASGs
+3. Checks if there's any instances with an outdated launch template version
+4. **If ASG uses MixedInstancesPolicy**, checks if there's any instances with an instance type that isn't part of the list of instance type overrides
+5. Checks if there's any instances with an outdated launch configuration
+6. If any of the conditions defined in the step 3, 4 or 5 are met for any instance, begin the rolling update process for that instance
+
+
 ## Usage
 
 | Environment variable | Description | Required | Default |
