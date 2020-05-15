@@ -16,6 +16,14 @@ import (
 	"time"
 )
 
+const (
+	MaximumFailedExecutionBeforePanic = 10
+)
+
+var (
+	executionFailedCounter = 0
+)
+
 func main() {
 	err := config.Initialize()
 	if err != nil {
@@ -28,6 +36,13 @@ func main() {
 	for {
 		if err := run(ec2Service, autoScalingService); err != nil {
 			log.Printf("Error during execution: %s", err.Error())
+			executionFailedCounter++
+			if executionFailedCounter > MaximumFailedExecutionBeforePanic {
+				panic(fmt.Errorf("execution failed %d times: %v", executionFailedCounter, err))
+			}
+		} else if executionFailedCounter > 0 {
+			log.Printf("Execution was successful after %d failed attempts, resetting counter to 0", executionFailedCounter)
+			executionFailedCounter = 0
 		}
 		log.Println("Sleeping for 20 seconds")
 		time.Sleep(20 * time.Second)
