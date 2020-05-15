@@ -2,6 +2,7 @@ package main
 
 import (
 	"github.com/TwinProduction/aws-eks-asg-rolling-update-handler/cloudtest"
+	"github.com/TwinProduction/aws-eks-asg-rolling-update-handler/config"
 	"github.com/TwinProduction/aws-eks-asg-rolling-update-handler/k8s"
 	"github.com/TwinProduction/aws-eks-asg-rolling-update-handler/k8stest"
 	"github.com/aws/aws-sdk-go/aws"
@@ -399,7 +400,7 @@ func TestHandleRollingUpgrade_withLaunchTemplateWhenLaunchTemplateDidNotUpdate(t
 		LaunchTemplateName:   aws.String("lt1"),
 	}
 	oldInstance := cloudtest.CreateTestAutoScalingInstance("old-1", "", launchTemplateSpecification, "InService")
-	asg := cloudtest.CreateTestAutoScalingGroup("asg", "", launchTemplateSpecification, []*autoscaling.Instance{oldInstance}, false)
+	asg := cloudtest.CreateTestAutoScalingGroup("asg", "", launchTemplateSpecification, []*autoscaling.Instance{oldInstance}, 0, 999, false)
 
 	oldNode := k8stest.CreateTestNode(aws.StringValue(oldInstance.InstanceId), "1000m", "1000Mi")
 
@@ -594,8 +595,9 @@ func TestHandleRollingUpgrade_withMixedInstancePolicyWhenOneOfTheInstanceTypesOv
 }
 
 func TestHandleRollingUpgrade_whenDesiredCapacityIsMaxCapacityBeforeRollingUpgrade(t *testing.T) {
+	config.Set([]string{}, true, true, true)
 	oldInstance := cloudtest.CreateTestAutoScalingInstance("old-1", "v1", nil, "InService")
-	asg := cloudtest.CreateTestAutoScalingGroup("asg", "v2", nil, []*autoscaling.Instance{oldInstance}, 0, 1)
+	asg := cloudtest.CreateTestAutoScalingGroup("asg", "v2", nil, []*autoscaling.Instance{oldInstance}, 0, 1, false)
 
 	oldNode := k8stest.CreateTestNode(aws.StringValue(oldInstance.InstanceId), "1000m", "1000Mi")
 	oldNodePod := k8stest.CreateTestPod("old-pod-1", oldNode.Name, "100m", "100Mi", false)

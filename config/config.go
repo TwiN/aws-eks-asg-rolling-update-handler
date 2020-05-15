@@ -71,11 +71,12 @@ func Initialize() error {
 
 // Set sets the application's configuration and is intended to be used for testing purposes.
 // See Initialize() for production
-func Set(autoScalingGroupNames []string, ignoreDaemonSets, deleteLocalData bool) {
+func Set(autoScalingGroupNames []string, ignoreDaemonSets, deleteLocalData, canIncreaseAutoScalingGroupMax bool) {
 	cfg = &config{
-		AutoScalingGroupNames: autoScalingGroupNames,
-		IgnoreDaemonSets:      ignoreDaemonSets,
-		DeleteLocalData:       deleteLocalData,
+		AutoScalingGroupNames:          autoScalingGroupNames,
+		IgnoreDaemonSets:               ignoreDaemonSets,
+		DeleteLocalData:                deleteLocalData,
+		CanIncreaseAutoScalingGroupMax: canIncreaseAutoScalingGroupMax,
 	}
 }
 

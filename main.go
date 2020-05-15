@@ -157,7 +157,7 @@ func HandleRollingUpgrade(kubernetesClient k8s.KubernetesClientApi, ec2Service e
 						continue
 					}
 					log.Printf("[%s][%s] Updated nodes do not have enough resources available, increasing desired count by 1", aws.StringValue(autoScalingGroup.AutoScalingGroupName), aws.StringValue(outdatedInstance.InstanceId))
-					err := cloud.SetAutoScalingGroupDesiredCount(autoScalingService, autoScalingGroup, aws.Int64Value(autoScalingGroup.DesiredCapacity)+1)
+					err := cloud.SetAutoScalingGroupDesiredCount(autoScalingService, autoScalingGroup, aws.Int64Value(autoScalingGroup.DesiredCapacity)+1, config.Get().CanIncreaseAutoScalingGroupMax)
 					if err != nil {
 						log.Printf("[%s][%s] Unable to increase ASG desired size: %v", aws.StringValue(autoScalingGroup.AutoScalingGroupName), aws.StringValue(outdatedInstance.InstanceId), err.Error())
 						log.Printf("[%s][%s] Skipping", aws.StringValue(autoScalingGroup.AutoScalingGroupName), aws.StringValue(outdatedInstance.InstanceId))
