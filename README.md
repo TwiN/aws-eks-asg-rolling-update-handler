@@ -30,6 +30,8 @@ On interval, this application:
 5. Checks if there's any instances with an outdated launch configuration
 6. If any of the conditions defined in the step 3, 4 or 5 are met for any instance, begin the rolling update process for that instance
 
+The steps of each actions are persisted directly on the old nodes (i.e. when the old node starts rolling out, gets drained, and gets scheduled for termination). Therefore, this application will not run into any issues if it is restarted, rescheduled or stopped at any point in time.
+
 
 ## Usage
 
