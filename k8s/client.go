@@ -2,7 +2,7 @@ package k8s
 
 import (
 	"fmt"
-	drain "github.com/openshift/kubernetes-drain"
+	"github.com/openshift/cluster-api/pkg/drain"
 	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
@@ -80,7 +80,6 @@ func (k *KubernetesClient) Drain(nodeName string, ignoreDaemonSets, deleteLocalD
 	if err != nil {
 		return err
 	}
-	// set options and drain nodes
 	return drain.Drain(k.client, []*v1.Node{node}, &drain.DrainOptions{
 		IgnoreDaemonsets:   ignoreDaemonSets,
 		GracePeriodSeconds: -1,
