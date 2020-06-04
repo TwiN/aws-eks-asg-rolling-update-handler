@@ -18,9 +18,13 @@ import (
 
 const (
 	MaximumFailedExecutionBeforePanic = 10
+	ExecutionInterval                 = 20 * time.Second
+	ExecutionTimeout                  = 15 * time.Minute
 )
 
 var (
+	ErrTimedOut = errors.New("execution timed out")
+
 	executionFailedCounter = 0
 )
 
@@ -44,8 +48,8 @@ func main() {
 			log.Printf("Execution was successful after %d failed attempts, resetting counter to 0", executionFailedCounter)
 			executionFailedCounter = 0
 		}
-		log.Println("Sleeping for 20 seconds")
-		time.Sleep(20 * time.Second)
+		log.Printf("Sleeping for %s", ExecutionInterval)
+		time.Sleep(ExecutionInterval)
 	}
 }
 
@@ -67,11 +71,32 @@ func run(ec2Service ec2iface.EC2API, autoScalingService autoscalingiface.AutoSca
 	if cfg.Debug {
 		log.Println("Described AutoScalingGroups successfully")
 	}
-	HandleRollingUpgrade(kubernetesClient, ec2Service, autoScalingService, autoScalingGroups)
+	err = HandleRollingUpgrade(kubernetesClient, ec2Service, autoScalingService, autoScalingGroups)
+	if err != nil {
+		panic(err)
+	}
 	return nil
 }
 
-func HandleRollingUpgrade(kubernetesClient k8s.KubernetesClientApi, ec2Service ec2iface.EC2API, autoScalingService autoscalingiface.AutoScalingAPI, autoScalingGroups []*autoscaling.Group) {
+func HandleRollingUpgrade(kubernetesClient k8s.KubernetesClientApi, ec2Service ec2iface.EC2API, autoScalingService autoscalingiface.AutoScalingAPI, autoScalingGroups []*autoscaling.Group) error {
+	timeout := make(chan bool, 1)
+	result := make(chan bool, 1)
+	go func() {
+		time.Sleep(ExecutionTimeout)
+		timeout <- true
+	}()
+	go func() {
+		result <- DoHandleRollingUpgrade(kubernetesClient, ec2Service, autoScalingService, autoScalingGroups)
+	}()
+	select {
+	case <-timeout:
+		return ErrTimedOut
+	case <-result:
+		return nil
+	}
+}
+
+func DoHandleRollingUpgrade(kubernetesClient k8s.KubernetesClientApi, ec2Service ec2iface.EC2API, autoScalingService autoscalingiface.AutoScalingAPI, autoScalingGroups []*autoscaling.Group) bool {
 	for _, autoScalingGroup := range autoScalingGroups {
 		outdatedInstances, updatedInstances, err := SeparateOutdatedFromUpdatedInstances(autoScalingGroup, ec2Service)
 		if err != nil {
@@ -165,7 +190,7 @@ func HandleRollingUpgrade(kubernetesClient k8s.KubernetesClientApi, ec2Service e
 					// As a result, we return here to make sure that multiple old instances didn't use the same updated
 					// instances to calculate resources available
 					log.Printf("[%s][%s] Node has been drained and scheduled for termination successfully", aws.StringValue(autoScalingGroup.AutoScalingGroupName), aws.StringValue(outdatedInstance.InstanceId))
-					return
+					return true
 				} else {
 					// Don't increase the ASG if the node has already been drained or scheduled for termination
 					if minutesSinceDrained != -1 || minutesSinceTerminated != -1 {
@@ -186,6 +211,7 @@ func HandleRollingUpgrade(kubernetesClient k8s.KubernetesClientApi, ec2Service e
 			}
 		}
 	}
+	return true
 }
 
 func getReadyNodesAndNumberOfNonReadyNodesOrInstances(updatedInstances []*autoscaling.Instance, autoScalingGroup *autoscaling.Group, kubernetesClient k8s.KubernetesClientApi) ([]*v1.Node, int) {
