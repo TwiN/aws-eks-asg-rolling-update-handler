@@ -1,6 +1,7 @@
 # aws-eks-asg-rolling-update-handler
 
 ![build](https://github.com/TwinProduction/aws-eks-asg-rolling-update-handler/workflows/build/badge.svg?branch=master)
+[![Go Report Card](https://goreportcard.com/badge/github.com/TwinProduction/aws-eks-asg-rolling-update-handler)](https://goreportcard.com/report/github.com/TwinProduction/aws-eks-asg-rolling-update-handler)
 [![Docker pulls](https://img.shields.io/docker/pulls/twinproduction/aws-eks-asg-rolling-update-handler.svg)](https://cloud.docker.com/repository/docker/twinproduction/aws-eks-asg-rolling-update-handler)
 
 This application handles rolling upgrades for AWS ASGs for EKS by replacing outdated nodes by new nodes.
