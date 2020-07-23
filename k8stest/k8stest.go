@@ -2,6 +2,9 @@ package k8stest
 
 import (
 	"errors"
+	"fmt"
+	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/service/autoscaling"
 	"k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -48,11 +51,16 @@ func (mock *MockKubernetesClient) GetPodsInNode(node string) ([]v1.Pod, error) {
 	return pods, nil
 }
 
-func (mock *MockKubernetesClient) GetNodeByAwsInstanceId(awsInstanceId string) (*v1.Node, error) {
-	mock.Counter["GetNodeByAwsInstanceId"]++
-	for _, node := range mock.Nodes {
-		// For the sake of simplicity, we'll just assume that the host name is the same as the node name
-		if node.Name == awsInstanceId {
+func (mock *MockKubernetesClient) GetNodeByAwsAutoScalingInstance(instance *autoscaling.Instance) (*v1.Node, error) {
+	mock.Counter["GetNodeByAwsAutoScalingInstance"]++
+	nodes, _ := mock.GetNodes()
+	return mock.FilterNodeByAutoScalingInstance(nodes, instance)
+}
+
+func (mock *MockKubernetesClient) FilterNodeByAutoScalingInstance(nodes []v1.Node, instance *autoscaling.Instance) (*v1.Node, error) {
+	mock.Counter["FilterNodeByAutoScalingInstance"]++
+	for _, node := range nodes {
+		if node.Spec.ProviderID == fmt.Sprintf("aws:///%s/%s", aws.StringValue(instance.AvailabilityZone), aws.StringValue(instance.InstanceId)) {
 			return &node, nil
 		}
 	}
@@ -70,9 +78,11 @@ func (mock *MockKubernetesClient) Drain(nodeName string, ignoreDaemonSets, delet
 	return nil
 }
 
-func CreateTestNode(name string, allocatableCpu, allocatableMemory string) v1.Node {
+func CreateTestNode(name, availabilityZone, instanceId, allocatableCpu, allocatableMemory string) v1.Node {
 	node := v1.Node{
-		Spec: v1.NodeSpec{},
+		Spec: v1.NodeSpec{
+			ProviderID: fmt.Sprintf("aws:///%s/%s", availabilityZone, instanceId),
+		},
 		Status: v1.NodeStatus{
 			Allocatable: map[v1.ResourceName]resource.Quantity{
 				v1.ResourceCPU:    resource.MustParse(allocatableCpu),

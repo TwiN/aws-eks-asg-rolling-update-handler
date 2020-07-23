@@ -1,6 +1,7 @@
 package k8s
 
 import (
+	"github.com/aws/aws-sdk-go/service/autoscaling"
 	"k8s.io/api/core/v1"
 	"log"
 )
@@ -19,11 +20,11 @@ func CheckIfNodeHasEnoughResourcesToTransferAllPodsInNodes(kubernetesClient Kube
 		for _, podInNode := range podsInNode {
 			for _, container := range podInNode.Spec.Containers {
 				if container.Resources.Requests.Cpu() != nil {
-					// Subtract the cpu request of the pod from the node's total allocatable
+					// Subtract the cpu request of the pod from the node's total allocatable cpu
 					availableTargetCpu -= container.Resources.Requests.Cpu().MilliValue()
 				}
 				if container.Resources.Requests.Memory() != nil {
-					// Subtract the cpu request of the pod from the node's total allocatable
+					// Subtract the memory request of the pod from the node's total allocatable memory
 					totalAvailableTargetMemory -= container.Resources.Requests.Memory().MilliValue()
 				}
 			}
@@ -68,8 +69,8 @@ func CheckIfNodeHasEnoughResourcesToTransferAllPodsInNodes(kubernetesClient Kube
 	return leftOverCpu >= 0 && leftOverMemory >= 0
 }
 
-func AnnotateNodeByAwsInstanceId(kubernetesClient KubernetesClientApi, awsInstanceId, key, value string) error {
-	node, err := kubernetesClient.GetNodeByAwsInstanceId(awsInstanceId)
+func AnnotateNodeByAwsAutoScalingInstance(kubernetesClient KubernetesClientApi, instance *autoscaling.Instance, key, value string) error {
+	node, err := kubernetesClient.GetNodeByAwsAutoScalingInstance(instance)
 	if err != nil {
 		return err
 	}

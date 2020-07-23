@@ -2,6 +2,8 @@ package k8s
 
 import (
 	"fmt"
+	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/service/autoscaling"
 	"github.com/openshift/cluster-api/pkg/drain"
 	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -21,7 +23,8 @@ const (
 type KubernetesClientApi interface {
 	GetNodes() ([]v1.Node, error)
 	GetPodsInNode(node string) ([]v1.Pod, error)
-	GetNodeByAwsInstanceId(awsInstanceId string) (*v1.Node, error)
+	GetNodeByAwsAutoScalingInstance(instance *autoscaling.Instance) (*v1.Node, error)
+	FilterNodeByAutoScalingInstance(nodes []v1.Node, instance *autoscaling.Instance) (*v1.Node, error)
 	UpdateNode(node *v1.Node) error
 	Drain(nodeName string, ignoreDaemonSets, deleteLocalData bool) error
 }
@@ -54,20 +57,39 @@ func (k *KubernetesClient) GetPodsInNode(node string) ([]v1.Pod, error) {
 	return podList.Items, nil
 }
 
-func (k *KubernetesClient) GetNodeByAwsInstanceId(awsInstanceId string) (*v1.Node, error) {
-	api := k.client.CoreV1().Nodes()
-	nodeList, err := api.List(metav1.ListOptions{
-		LabelSelector: fmt.Sprintf("%s=%s", HostNameAnnotationKey, awsInstanceId),
-		Limit:         1,
-	})
+// GetNodeByAwsAutoScalingInstance gets the Kubernetes node matching an AWS AutoScaling instance
+// Because we cannot filter by spec.providerID, the entire list of nodes is fetched every time
+// this function is called
+func (k *KubernetesClient) GetNodeByAwsAutoScalingInstance(instance *autoscaling.Instance) (*v1.Node, error) {
+	////For some reason, we can't filter by spec.providerID
+	//api := k.client.CoreV1().Nodes()
+	//nodeList, err := api.List(metav1.ListOptions{
+	//	//LabelSelector: fmt.Sprintf("%s=%s", HostNameAnnotationKey, aws.StringValue(instance.InstanceId)),
+	//	FieldSelector: fmt.Sprintf("spec.providerID=aws:///%s/%s", aws.StringValue(instance.AvailabilityZone), aws.StringValue(instance.InstanceId)),
+	//	Limit:         1,
+	//})
+	//if err != nil {
+	//	return nil, err
+	//}
+	//if len(nodeList.Items) == 0 {
+	//	return nil, fmt.Errorf("nodes with AWS instance id \"%s\" not found", aws.StringValue(instance.InstanceId))
+	//}
+	//return &nodeList.Items[0], nil
+	nodes, err := k.GetNodes()
 	if err != nil {
 		return nil, err
 	}
-	if len(nodeList.Items) == 0 {
-		// TODO: get ip from ec2.Instance and try to get node by ip instead
-		return nil, fmt.Errorf("nodes with AWS instance id \"%s\" not found", awsInstanceId)
+	return k.FilterNodeByAutoScalingInstance(nodes, instance)
+}
+
+func (k *KubernetesClient) FilterNodeByAutoScalingInstance(nodes []v1.Node, instance *autoscaling.Instance) (*v1.Node, error) {
+	providerId := fmt.Sprintf("aws:///%s/%s", aws.StringValue(instance.AvailabilityZone), aws.StringValue(instance.InstanceId))
+	for _, node := range nodes {
+		if node.Spec.ProviderID == providerId {
+			return &node, nil
+		}
 	}
-	return &nodeList.Items[0], nil
+	return nil, fmt.Errorf("node with providerID \"%s\" not found", providerId)
 }
 
 func (k *KubernetesClient) UpdateNode(node *v1.Node) error {
