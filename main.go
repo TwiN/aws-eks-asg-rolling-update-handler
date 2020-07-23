@@ -18,7 +18,7 @@ import (
 
 const (
 	MaximumFailedExecutionBeforePanic = 10
-	ExecutionInterval                 = 10 * time.Second
+	ExecutionInterval                 = 20 * time.Second
 	ExecutionTimeout                  = 15 * time.Minute
 )
 
