@@ -68,8 +68,8 @@ func CheckIfNodeHasEnoughResourcesToTransferAllPodsInNodes(kubernetesClient Kube
 	return leftOverCpu >= 0 && leftOverMemory >= 0
 }
 
-func AnnotateNodeByHostName(kubernetesClient KubernetesClientApi, hostName, key, value string) error {
-	node, err := kubernetesClient.GetNodeByHostName(hostName)
+func AnnotateNodeByAwsInstanceId(kubernetesClient KubernetesClientApi, awsInstanceId, key, value string) error {
+	node, err := kubernetesClient.GetNodeByAwsInstanceId(awsInstanceId)
 	if err != nil {
 		return err
 	}

@@ -48,11 +48,11 @@ func (mock *MockKubernetesClient) GetPodsInNode(node string) ([]v1.Pod, error) {
 	return pods, nil
 }
 
-func (mock *MockKubernetesClient) GetNodeByHostName(hostName string) (*v1.Node, error) {
-	mock.Counter["GetNodeByHostName"]++
+func (mock *MockKubernetesClient) GetNodeByAwsInstanceId(awsInstanceId string) (*v1.Node, error) {
+	mock.Counter["GetNodeByAwsInstanceId"]++
 	for _, node := range mock.Nodes {
 		// For the sake of simplicity, we'll just assume that the host name is the same as the node name
-		if node.Name == hostName {
+		if node.Name == awsInstanceId {
 			return &node, nil
 		}
 	}

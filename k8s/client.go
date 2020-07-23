@@ -21,7 +21,7 @@ const (
 type KubernetesClientApi interface {
 	GetNodes() ([]v1.Node, error)
 	GetPodsInNode(node string) ([]v1.Pod, error)
-	GetNodeByHostName(hostName string) (*v1.Node, error)
+	GetNodeByAwsInstanceId(awsInstanceId string) (*v1.Node, error)
 	UpdateNode(node *v1.Node) error
 	Drain(nodeName string, ignoreDaemonSets, deleteLocalData bool) error
 }
@@ -54,17 +54,18 @@ func (k *KubernetesClient) GetPodsInNode(node string) ([]v1.Pod, error) {
 	return podList.Items, nil
 }
 
-func (k *KubernetesClient) GetNodeByHostName(hostName string) (*v1.Node, error) {
+func (k *KubernetesClient) GetNodeByAwsInstanceId(awsInstanceId string) (*v1.Node, error) {
 	api := k.client.CoreV1().Nodes()
 	nodeList, err := api.List(metav1.ListOptions{
-		LabelSelector: fmt.Sprintf("%s=%s", HostNameAnnotationKey, hostName),
+		LabelSelector: fmt.Sprintf("%s=%s", HostNameAnnotationKey, awsInstanceId),
 		Limit:         1,
 	})
 	if err != nil {
 		return nil, err
 	}
 	if len(nodeList.Items) == 0 {
-		return nil, fmt.Errorf("nodes with hostname \"%s\" not found", hostName)
+		// TODO: get ip from ec2.Instance and try to get node by ip instead
+		return nil, fmt.Errorf("nodes with AWS instance id \"%s\" not found", awsInstanceId)
 	}
 	return &nodeList.Items[0], nil
 }

@@ -239,7 +239,7 @@ func TestHandleRollingUpgrade(t *testing.T) {
 		t.Error("Node shouldn't have been drained yet, therefore shouldn't have been annotated with", k8s.RollingUpdateDrainedTimestampAnnotationKey)
 	}
 
-	// Fifth run (new instance is now InService, but node has still not joined cluster (GetNodeByHostName should return not found))
+	// Fifth run (new instance is now InService, but node has still not joined cluster (GetNodeByAwsInstanceId should return not found))
 	newInstance.SetLifecycleState("InService")
 	HandleRollingUpgrade(mockKubernetesClient, mockEc2Service, mockAutoScalingService, []*autoscaling.Group{asg})
 	oldNode = mockKubernetesClient.Nodes[aws.StringValue(oldInstance.InstanceId)]
@@ -354,7 +354,7 @@ func TestHandleRollingUpgrade_withLaunchTemplate(t *testing.T) {
 		t.Error("Node shouldn't have been drained yet, therefore shouldn't have been annotated with", k8s.RollingUpdateDrainedTimestampAnnotationKey)
 	}
 
-	// Fifth run (new instance is now InService, but node has still not joined cluster (GetNodeByHostName should return not found))
+	// Fifth run (new instance is now InService, but node has still not joined cluster (GetNodeByAwsInstanceId should return not found))
 	newInstance.SetLifecycleState("InService")
 	HandleRollingUpgrade(mockKubernetesClient, mockEc2Service, mockAutoScalingService, []*autoscaling.Group{asg})
 	oldNode = mockKubernetesClient.Nodes[aws.StringValue(oldInstance.InstanceId)]
@@ -484,7 +484,7 @@ func TestHandleRollingUpgrade_withEnoughPodsToRequireTwoNewNodes(t *testing.T) {
 		t.Error("Node shouldn't have been drained yet, therefore shouldn't have been annotated with", k8s.RollingUpdateDrainedTimestampAnnotationKey)
 	}
 
-	// Fifth run (new instance is now InService, but node has still not joined cluster (GetNodeByHostName should return not found))
+	// Fifth run (new instance is now InService, but node has still not joined cluster (GetNodeByAwsInstanceId should return not found))
 	newInstance.SetLifecycleState("InService")
 	HandleRollingUpgrade(mockKubernetesClient, mockEc2Service, mockAutoScalingService, []*autoscaling.Group{asg})
 	oldNode = mockKubernetesClient.Nodes[aws.StringValue(oldInstance.InstanceId)]
