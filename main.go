@@ -425,21 +425,21 @@ func compareLaunchTemplateVersions(targetTemplate *ec2.LaunchTemplate, lt1, lt2 
 	}
 	// if either version starts with `$`, then resolve to actual version from LaunchTemplate
 	var lt1version, lt2version string
-	switch *lt1.Version {
+	switch aws.StringValue(lt1.Version) {
 	case "$Default":
-		lt1version = fmt.Sprintf("%d", *targetTemplate.DefaultVersionNumber)
+		lt1version = fmt.Sprintf("%d", aws.Int64Value(targetTemplate.DefaultVersionNumber))
 	case "$Latest":
-		lt1version = fmt.Sprintf("%d", *targetTemplate.LatestVersionNumber)
+		lt1version = fmt.Sprintf("%d", aws.Int64Value(targetTemplate.LatestVersionNumber))
 	default:
-		lt1version = *lt1.Version
+		lt1version = aws.StringValue(lt1.Version)
 	}
-	switch *lt2.Version {
+	switch aws.StringValue(lt2.Version) {
 	case "$Default":
-		lt2version = fmt.Sprintf("%d", *targetTemplate.DefaultVersionNumber)
+		lt2version = fmt.Sprintf("%d", aws.Int64Value(targetTemplate.DefaultVersionNumber))
 	case "$Latest":
-		lt2version = fmt.Sprintf("%d", *targetTemplate.LatestVersionNumber)
+		lt2version = fmt.Sprintf("%d", aws.Int64Value(targetTemplate.LatestVersionNumber))
 	default:
-		lt2version = *lt2.Version
+		lt2version = aws.StringValue(lt2.Version)
 	}
 	return lt1version == lt2version
 }
