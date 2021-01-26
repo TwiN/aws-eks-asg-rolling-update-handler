@@ -80,6 +80,9 @@ func run(ec2Service ec2iface.EC2API, autoScalingService autoscalingiface.AutoSca
 	return nil
 }
 
+// HandleRollingUpgrade handles rolling upgrades.
+//
+// Returns an error if an execution lasts for longer than ExecutionTimeout
 func HandleRollingUpgrade(kubernetesClient k8s.KubernetesClientApi, ec2Service ec2iface.EC2API, autoScalingService autoscalingiface.AutoScalingAPI, autoScalingGroups []*autoscaling.Group) error {
 	timeout := make(chan bool, 1)
 	result := make(chan bool, 1)
@@ -98,6 +101,8 @@ func HandleRollingUpgrade(kubernetesClient k8s.KubernetesClientApi, ec2Service e
 	}
 }
 
+// DoHandleRollingUpgrade handles rolling upgrades by iterating over every single AutoScalingGroups' outdated
+// instances
 func DoHandleRollingUpgrade(kubernetesClient k8s.KubernetesClientApi, ec2Service ec2iface.EC2API, autoScalingService autoscalingiface.AutoScalingAPI, autoScalingGroups []*autoscaling.Group) bool {
 	for _, autoScalingGroup := range autoScalingGroups {
 		outdatedInstances, updatedInstances, err := SeparateOutdatedFromUpdatedInstances(autoScalingGroup, ec2Service)
@@ -319,6 +324,7 @@ func getRollingUpdateTimestampsFromNode(node *v1.Node) (minutesSinceStarted int,
 	return
 }
 
+// SeparateOutdatedFromUpdatedInstances
 func SeparateOutdatedFromUpdatedInstances(asg *autoscaling.Group, ec2Svc ec2iface.EC2API) ([]*autoscaling.Instance, []*autoscaling.Instance, error) {
 	if config.Get().Debug {
 		log.Printf("[%s] Separating outdated from updated instances", aws.StringValue(asg.AutoScalingGroupName))
@@ -341,6 +347,8 @@ func SeparateOutdatedFromUpdatedInstances(asg *autoscaling.Group, ec2Svc ec2ifac
 	return nil, nil, errors.New("AutoScalingGroup has neither launch template nor launch configuration")
 }
 
+// SeparateOutdatedFromUpdatedInstancesUsingLaunchTemplate separates a list of instances into a list of outdated
+// instances and a list of updated instances.
 func SeparateOutdatedFromUpdatedInstancesUsingLaunchTemplate(targetLaunchTemplate *autoscaling.LaunchTemplateSpecification, overrides []*autoscaling.LaunchTemplateOverrides, instances []*autoscaling.Instance, ec2Svc ec2iface.EC2API) ([]*autoscaling.Instance, []*autoscaling.Instance, error) {
 	var (
 		oldInstances   []*autoscaling.Instance
@@ -393,6 +401,8 @@ func isInstanceTypePartOfLaunchTemplateOverrides(overrides []*autoscaling.Launch
 	return false
 }
 
+// SeparateOutdatedFromUpdatedInstancesUsingLaunchConfiguration separates a list of instances into a list of outdated
+// instances and a list of updated instances.
 func SeparateOutdatedFromUpdatedInstancesUsingLaunchConfiguration(targetLaunchConfigurationName *string, instances []*autoscaling.Instance) ([]*autoscaling.Instance, []*autoscaling.Instance, error) {
 	var (
 		oldInstances []*autoscaling.Instance

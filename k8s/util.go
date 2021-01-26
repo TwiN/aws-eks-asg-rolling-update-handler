@@ -7,6 +7,15 @@ import (
 	"k8s.io/api/core/v1"
 )
 
+// CheckIfNodeHasEnoughResourcesToTransferAllPodsInNodes calculates the resources available in the target nodes
+// and compares them with the resources that would be required if the old node were to be drained
+//
+// This is not fool proof: 2 targetNodes with 1G available in each would cause the assumption that you can fit
+// a 2G pod in the targetNodes when you obviously can't (you'd need 1 node with 2G available, not 2 with 1G)
+// That's alright, because the purpose is to provide a smooth rolling upgrade, not a flawless experience,  and
+// while the latter is definitely possible, it would slow down the process by quite a bit. In a way, this is
+// the beauty of co-existing with the cluster autoscaler; an extra node will be spun up to handle the leftovers,
+// if any.
 func CheckIfNodeHasEnoughResourcesToTransferAllPodsInNodes(kubernetesClient KubernetesClientApi, oldNode *v1.Node, targetNodes []*v1.Node) bool {
 	totalAvailableTargetCpu := int64(0)
 	totalAvailableTargetMemory := int64(0)
@@ -77,6 +86,7 @@ func CheckIfNodeHasEnoughResourcesToTransferAllPodsInNodes(kubernetesClient Kube
 	return leftOverCpu >= 0 && leftOverMemory >= 0
 }
 
+// AnnotateNodeByAwsAutoScalingInstance adds an annotation to the Kubernetes node represented by a given AWS instance
 func AnnotateNodeByAwsAutoScalingInstance(kubernetesClient KubernetesClientApi, instance *autoscaling.Instance, key, value string) error {
 	node, err := kubernetesClient.GetNodeByAwsAutoScalingInstance(instance)
 	if err != nil {

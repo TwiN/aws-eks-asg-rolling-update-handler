@@ -34,12 +34,14 @@ type KubernetesClient struct {
 	client *kubernetes.Clientset
 }
 
+// NewKubernetesClient creates a new KubernetesClient
 func NewKubernetesClient(client *kubernetes.Clientset) *KubernetesClient {
 	return &KubernetesClient{
 		client: client,
 	}
 }
 
+// GetNodes retrieves all nodes from the cluster
 func (k *KubernetesClient) GetNodes() ([]v1.Node, error) {
 	nodeList, err := k.client.CoreV1().Nodes().List(metav1.ListOptions{})
 	if err != nil {
@@ -48,6 +50,7 @@ func (k *KubernetesClient) GetNodes() ([]v1.Node, error) {
 	return nodeList.Items, nil
 }
 
+// GetPodsInNode retrieves all pods from a given node
 func (k *KubernetesClient) GetPodsInNode(node string) ([]v1.Pod, error) {
 	podList, err := k.client.CoreV1().Pods("").List(metav1.ListOptions{
 		FieldSelector: fmt.Sprintf("spec.nodeName=%s", node),
@@ -83,6 +86,7 @@ func (k *KubernetesClient) GetNodeByAwsAutoScalingInstance(instance *autoscaling
 	return k.FilterNodeByAutoScalingInstance(nodes, instance)
 }
 
+// FilterNodeByAutoScalingInstance extracts the Kubernetes node belonging to a given AWS instance from a list of nodes
 func (k *KubernetesClient) FilterNodeByAutoScalingInstance(nodes []v1.Node, instance *autoscaling.Instance) (*v1.Node, error) {
 	providerId := fmt.Sprintf("aws:///%s/%s", aws.StringValue(instance.AvailabilityZone), aws.StringValue(instance.InstanceId))
 	for _, node := range nodes {
@@ -93,12 +97,14 @@ func (k *KubernetesClient) FilterNodeByAutoScalingInstance(nodes []v1.Node, inst
 	return nil, fmt.Errorf("node with providerID \"%s\" not found", providerId)
 }
 
+// UpdateNode updates a node
 func (k *KubernetesClient) UpdateNode(node *v1.Node) error {
 	api := k.client.CoreV1().Nodes()
 	_, err := api.Update(node)
 	return err
 }
 
+// Drain gracefully deletes all pods from a given node
 func (k *KubernetesClient) Drain(nodeName string, ignoreDaemonSets, deleteLocalData bool) error {
 	node, err := k.client.CoreV1().Nodes().Get(nodeName, metav1.GetOptions{})
 	if err != nil {
