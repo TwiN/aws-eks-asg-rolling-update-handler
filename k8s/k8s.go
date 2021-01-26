@@ -1,12 +1,13 @@
 package k8s
 
 import (
+	"os"
+	"path/filepath"
+
 	"github.com/TwinProduction/aws-eks-asg-rolling-update-handler/config"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
-	"os"
-	"path/filepath"
 )
 
 // If the current environment is dev, use the user's kubeconfig

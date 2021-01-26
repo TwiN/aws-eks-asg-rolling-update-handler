@@ -1,6 +1,8 @@
 package main
 
 import (
+	"testing"
+
 	"github.com/TwinProduction/aws-eks-asg-rolling-update-handler/cloudtest"
 	"github.com/TwinProduction/aws-eks-asg-rolling-update-handler/k8s"
 	"github.com/TwinProduction/aws-eks-asg-rolling-update-handler/k8stest"
@@ -8,7 +10,6 @@ import (
 	"github.com/aws/aws-sdk-go/service/autoscaling"
 	"github.com/aws/aws-sdk-go/service/ec2"
 	v1 "k8s.io/api/core/v1"
-	"testing"
 )
 
 func TestSeparateOutdatedFromUpdatedInstancesUsingLaunchConfiguration_whenInstanceIsOutdated(t *testing.T) {
@@ -177,7 +178,7 @@ func TestHandleRollingUpgrade(t *testing.T) {
 	asg := cloudtest.CreateTestAutoScalingGroup("asg", "v2", nil, []*autoscaling.Instance{oldInstance}, false)
 
 	oldNode := k8stest.CreateTestNode("old-node-1", aws.StringValue(oldInstance.AvailabilityZone), aws.StringValue(oldInstance.InstanceId), "1000m", "1000Mi")
-	oldNodePod := k8stest.CreateTestPod("old-pod-1", oldNode.Name, "100m", "100Mi", false)
+	oldNodePod := k8stest.CreateTestPod("old-pod-1", oldNode.Name, "100m", "100Mi", false, v1.PodRunning)
 
 	mockKubernetesClient := k8stest.NewMockKubernetesClient([]v1.Node{oldNode}, []v1.Pod{oldNodePod})
 	mockEc2Service := cloudtest.NewMockEC2Service(nil)
@@ -292,7 +293,7 @@ func TestHandleRollingUpgrade_withLaunchTemplate(t *testing.T) {
 	asg := cloudtest.CreateTestAutoScalingGroup("asg", "", newLaunchTemplateSpecification, []*autoscaling.Instance{oldInstance}, false)
 
 	oldNode := k8stest.CreateTestNode("old-node-1", aws.StringValue(oldInstance.AvailabilityZone), aws.StringValue(oldInstance.InstanceId), "1000m", "1000Mi")
-	oldNodePod := k8stest.CreateTestPod("old-pod-1", oldNode.Name, "100m", "100Mi", false)
+	oldNodePod := k8stest.CreateTestPod("old-pod-1", oldNode.Name, "100m", "100Mi", false, v1.PodRunning)
 
 	mockKubernetesClient := k8stest.NewMockKubernetesClient([]v1.Node{oldNode}, []v1.Pod{oldNodePod})
 	mockEc2Service := cloudtest.NewMockEC2Service([]*ec2.LaunchTemplate{lt})
@@ -419,12 +420,14 @@ func TestHandleRollingUpgrade_withEnoughPodsToRequireTwoNewNodes(t *testing.T) {
 	asg := cloudtest.CreateTestAutoScalingGroup("asg", "v2", nil, []*autoscaling.Instance{oldInstance}, false)
 
 	oldNode := k8stest.CreateTestNode("old-node-1", aws.StringValue(oldInstance.AvailabilityZone), aws.StringValue(oldInstance.InstanceId), "1000m", "1000Mi")
-	oldNodeFirstPod := k8stest.CreateTestPod("old-pod-1", oldNode.Name, "300m", "300Mi", false)
-	oldNodeSecondPod := k8stest.CreateTestPod("old-pod-2", oldNode.Name, "300m", "300Mi", false)
-	oldNodeThirdPod := k8stest.CreateTestPod("old-pod-3", oldNode.Name, "300m", "300Mi", false)
-	oldNodeFourthPod := k8stest.CreateTestPod("old-pod-4", oldNode.Name, "300m", "300Mi", false)
+	oldNodeFirstPod := k8stest.CreateTestPod("old-pod-1", oldNode.Name, "300m", "300Mi", false, v1.PodRunning)
+	oldNodeSecondPod := k8stest.CreateTestPod("old-pod-2", oldNode.Name, "300m", "300Mi", false, v1.PodRunning)
+	oldNodeThirdPod := k8stest.CreateTestPod("old-pod-3", oldNode.Name, "300m", "300Mi", false, v1.PodRunning)
+	oldNodeFourthPod := k8stest.CreateTestPod("old-pod-4", oldNode.Name, "300m", "300Mi", false, v1.PodRunning)
+	// This pod should be ignored, because the pod.Status.Phase is v1.PodFailed
+	oldNodeFifthPod := k8stest.CreateTestPod("old-pod-5-evicted", oldNode.Name, "99999m", "99999Mi", false, v1.PodFailed)
 
-	mockKubernetesClient := k8stest.NewMockKubernetesClient([]v1.Node{oldNode}, []v1.Pod{oldNodeFirstPod, oldNodeSecondPod, oldNodeThirdPod, oldNodeFourthPod})
+	mockKubernetesClient := k8stest.NewMockKubernetesClient([]v1.Node{oldNode}, []v1.Pod{oldNodeFirstPod, oldNodeSecondPod, oldNodeThirdPod, oldNodeFourthPod, oldNodeFifthPod})
 	mockEc2Service := cloudtest.NewMockEC2Service(nil)
 	mockAutoScalingService := cloudtest.NewMockAutoScalingService([]*autoscaling.Group{asg})
 

@@ -3,6 +3,7 @@ package k8stest
 import (
 	"errors"
 	"fmt"
+
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/autoscaling"
 	"k8s.io/api/core/v1"
@@ -95,7 +96,7 @@ func CreateTestNode(name, availabilityZone, instanceId, allocatableCpu, allocata
 	return node
 }
 
-func CreateTestPod(name, nodeName, cpuRequest, cpuMemory string, isDaemonSet bool) v1.Pod {
+func CreateTestPod(name, nodeName, cpuRequest, cpuMemory string, isDaemonSet bool, podPhase v1.PodPhase) v1.Pod {
 	pod := v1.Pod{
 		Spec: v1.PodSpec{
 			NodeName: nodeName,
@@ -109,6 +110,7 @@ func CreateTestPod(name, nodeName, cpuRequest, cpuMemory string, isDaemonSet boo
 				},
 			}},
 		},
+		Status: v1.PodStatus{Phase: podPhase},
 	}
 	pod.SetName(name)
 	if isDaemonSet {

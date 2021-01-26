@@ -1,9 +1,10 @@
 package k8s
 
 import (
+	"log"
+
 	"github.com/aws/aws-sdk-go/service/autoscaling"
 	"k8s.io/api/core/v1"
-	"log"
 )
 
 func CheckIfNodeHasEnoughResourcesToTransferAllPodsInNodes(kubernetesClient KubernetesClientApi, oldNode *v1.Node, targetNodes []*v1.Node) bool {
@@ -18,6 +19,10 @@ func CheckIfNodeHasEnoughResourcesToTransferAllPodsInNodes(kubernetesClient Kube
 			continue
 		}
 		for _, podInNode := range podsInNode {
+			// Skip pods that have terminated (e.g. "Evicted" pods that haven't been cleaned up)
+			if podInNode.Status.Phase == v1.PodFailed {
+				continue
+			}
 			for _, container := range podInNode.Spec.Containers {
 				if container.Resources.Requests.Cpu() != nil {
 					// Subtract the cpu request of the pod from the node's total allocatable cpu
@@ -29,7 +34,6 @@ func CheckIfNodeHasEnoughResourcesToTransferAllPodsInNodes(kubernetesClient Kube
 				}
 			}
 		}
-
 		totalAvailableTargetCpu += availableTargetCpu
 		totalAvailableTargetMemory += availableTargetMemory
 	}
@@ -42,6 +46,10 @@ func CheckIfNodeHasEnoughResourcesToTransferAllPodsInNodes(kubernetesClient Kube
 		return true
 	}
 	for _, podInNode := range podsInNode {
+		// Skip pods that have terminated (e.g. "Evicted" pods that haven't been cleaned up)
+		if podInNode.Status.Phase == v1.PodFailed {
+			continue
+		}
 		// Ignore DaemonSets in the old node, because these pods will also be present in the target nodes
 		hasDaemonSetOwnerReference := false
 		for _, owner := range podInNode.GetOwnerReferences() {
