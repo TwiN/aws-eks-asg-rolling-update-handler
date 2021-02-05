@@ -324,7 +324,8 @@ func getRollingUpdateTimestampsFromNode(node *v1.Node) (minutesSinceStarted int,
 	return
 }
 
-// SeparateOutdatedFromUpdatedInstances
+// SeparateOutdatedFromUpdatedInstances splits a list of instances into a list of outdated
+// instances and a list of updated instances.
 func SeparateOutdatedFromUpdatedInstances(asg *autoscaling.Group, ec2Svc ec2iface.EC2API) ([]*autoscaling.Instance, []*autoscaling.Instance, error) {
 	if config.Get().Debug {
 		log.Printf("[%s] Separating outdated from updated instances", aws.StringValue(asg.AutoScalingGroupName))
