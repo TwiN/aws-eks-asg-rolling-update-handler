@@ -114,48 +114,31 @@ func DoHandleRollingUpgrade(kubernetesClient k8s.KubernetesClientApi, ec2Service
 			log.Printf("[%s] outdatedInstances: %v", aws.StringValue(autoScalingGroup.AutoScalingGroupName), outdatedInstances)
 			log.Printf("[%s] updatedInstances: %v", aws.StringValue(autoScalingGroup.AutoScalingGroupName), updatedInstances)
 		}
-
 		// Get the updated and ready nodes from the list of updated instances
 		// This will be used to determine if the desired number of updated instances need to scale up or not
 		// We also use this to clean up, if necessary
 		updatedReadyNodes, numberOfNonReadyNodesOrInstances := getReadyNodesAndNumberOfNonReadyNodesOrInstances(updatedInstances, autoScalingGroup, kubernetesClient)
-
 		if len(outdatedInstances) == 0 {
 			log.Printf("[%s] All instances are up to date", aws.StringValue(autoScalingGroup.AutoScalingGroupName))
 			continue
 		} else {
 			log.Printf("[%s] outdated=%d; updated=%d; updatedAndReady=%d; asgCurrent=%d; asgDesired=%d; asgMax=%d", aws.StringValue(autoScalingGroup.AutoScalingGroupName), len(outdatedInstances), len(updatedInstances), len(updatedReadyNodes), len(autoScalingGroup.Instances), aws.Int64Value(autoScalingGroup.DesiredCapacity), aws.Int64Value(autoScalingGroup.MaxSize))
 		}
-
 		if int64(len(autoScalingGroup.Instances)) < aws.Int64Value(autoScalingGroup.DesiredCapacity) {
 			log.Printf("[%s] Skipping because ASG has a desired capacity of %d, but only has %d instances", aws.StringValue(autoScalingGroup.AutoScalingGroupName), aws.Int64Value(autoScalingGroup.DesiredCapacity), len(autoScalingGroup.Instances))
 			continue
 		}
-
 		if numberOfNonReadyNodesOrInstances != 0 {
 			log.Printf("[%s] ASG has %d non-ready updated nodes/instances, waiting until all nodes/instances are ready", aws.StringValue(autoScalingGroup.AutoScalingGroupName), numberOfNonReadyNodesOrInstances)
 			continue
 		}
-
-		//nodes, err := kubernetesClient.GetNodes()
-		//if err != nil {
-		//	log.Printf("[%s] Skipping ASG because to get outdated node from Kubernetes: %v", aws.StringValue(autoScalingGroup.AutoScalingGroupName), err.Error())
-		//	continue
-		//}
 		for _, outdatedInstance := range outdatedInstances {
-			//node, err := kubernetesClient.FilterNodeByAutoScalingInstance(nodes, outdatedInstance)
-			//if err == nil {
-			//	log.Printf("[%s][%s] Skipping because unable to get outdated node from Kubernetes: %v", aws.StringValue(autoScalingGroup.AutoScalingGroupName), aws.StringValue(outdatedInstance.InstanceId), err.Error())
-			//	continue
-			//}
 			node, err := kubernetesClient.GetNodeByAwsAutoScalingInstance(outdatedInstance)
 			if err != nil {
 				log.Printf("[%s][%s] Skipping because unable to get outdated node from Kubernetes: %v", aws.StringValue(autoScalingGroup.AutoScalingGroupName), aws.StringValue(outdatedInstance.InstanceId), err.Error())
 				continue
 			}
-
 			minutesSinceStarted, minutesSinceDrained, minutesSinceTerminated := getRollingUpdateTimestampsFromNode(node)
-
 			// Check if outdated nodes in k8s have been marked with annotation from aws-eks-asg-rolling-update-handler
 			if minutesSinceStarted == -1 {
 				log.Printf("[%s][%s] Starting node rollout process", aws.StringValue(autoScalingGroup.AutoScalingGroupName), aws.StringValue(outdatedInstance.InstanceId))

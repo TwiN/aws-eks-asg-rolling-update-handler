@@ -1,24 +1,23 @@
 package k8s
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/autoscaling"
-	"github.com/openshift/cluster-api/pkg/drain"
 	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/kubectl/pkg/drain"
 )
 
 const (
-	ScaleDownDisabledAnnotationKey                = "cluster-autoscaler.kubernetes.io/scale-down-disabled"
 	RollingUpdateStartedTimestampAnnotationKey    = "aws-eks-asg-rolling-update-handler/started-at"
 	RollingUpdateDrainedTimestampAnnotationKey    = "aws-eks-asg-rolling-update-handler/drained-at"
 	RollingUpdateTerminatedTimestampAnnotationKey = "aws-eks-asg-rolling-update-handler/terminated-at"
-	HostNameAnnotationKey                         = "kubernetes.io/hostname"
 )
 
 type KubernetesClientApi interface {
@@ -43,7 +42,7 @@ func NewKubernetesClient(client *kubernetes.Clientset) *KubernetesClient {
 
 // GetNodes retrieves all nodes from the cluster
 func (k *KubernetesClient) GetNodes() ([]v1.Node, error) {
-	nodeList, err := k.client.CoreV1().Nodes().List(metav1.ListOptions{})
+	nodeList, err := k.client.CoreV1().Nodes().List(context.TODO(), metav1.ListOptions{})
 	if err != nil {
 		return nil, err
 	}
@@ -52,7 +51,7 @@ func (k *KubernetesClient) GetNodes() ([]v1.Node, error) {
 
 // GetPodsInNode retrieves all pods from a given node
 func (k *KubernetesClient) GetPodsInNode(node string) ([]v1.Pod, error) {
-	podList, err := k.client.CoreV1().Pods("").List(metav1.ListOptions{
+	podList, err := k.client.CoreV1().Pods("").List(context.TODO(), metav1.ListOptions{
 		FieldSelector: fmt.Sprintf("spec.nodeName=%s", node),
 	})
 	if err != nil {
@@ -100,34 +99,45 @@ func (k *KubernetesClient) FilterNodeByAutoScalingInstance(nodes []v1.Node, inst
 // UpdateNode updates a node
 func (k *KubernetesClient) UpdateNode(node *v1.Node) error {
 	api := k.client.CoreV1().Nodes()
-	_, err := api.Update(node)
+	_, err := api.Update(context.TODO(), node, metav1.UpdateOptions{})
 	return err
 }
 
 // Drain gracefully deletes all pods from a given node
 func (k *KubernetesClient) Drain(nodeName string, ignoreDaemonSets, deleteLocalData bool) error {
-	node, err := k.client.CoreV1().Nodes().Get(nodeName, metav1.GetOptions{})
+	node, err := k.client.CoreV1().Nodes().Get(context.TODO(), nodeName, metav1.GetOptions{})
 	if err != nil {
 		return err
 	}
-	return drain.Drain(k.client, []*v1.Node{node}, &drain.DrainOptions{
-		IgnoreDaemonsets:   ignoreDaemonSets,
-		GracePeriodSeconds: -1,
-		Force:              true,
-		Logger:             &drainLogger{NodeName: nodeName},
-		DeleteLocalData:    deleteLocalData,
-		Timeout:            5 * time.Minute,
-	})
+	drainer := &drain.Helper{
+		Client:              k.client,
+		Force:               true,
+		IgnoreAllDaemonSets: ignoreDaemonSets,
+		DeleteLocalData:     deleteLocalData,
+		GracePeriodSeconds:  -1,
+		Timeout:             5 * time.Minute,
+		Out:                 drainLogger{NodeName: nodeName},
+		ErrOut:              drainLogger{NodeName: nodeName},
+		OnPodDeletedOrEvicted: func(pod *v1.Pod, usingEviction bool) {
+			log.Printf("[%s][DRAINER] evicted pod %s/%s", nodeName, pod.Namespace, pod.Name)
+		},
+	}
+	if err := drain.RunCordonOrUncordon(drainer, node, true); err != nil {
+		log.Printf("[%s][DRAINER] Failed to cordon node: %v", node.Name, err)
+		return err
+	}
+	if err := drain.RunNodeDrain(drainer, node.Name); err != nil {
+		log.Printf("[%s][DRAINER] Failed to drain node: %v", node.Name, err)
+		return err
+	}
+	return nil
 }
 
 type drainLogger struct {
 	NodeName string
 }
 
-func (l *drainLogger) Log(v ...interface{}) {
-	log.Println(fmt.Sprintf("[%s][DRAINER]", l.NodeName), fmt.Sprint(v...))
-}
-
-func (l *drainLogger) Logf(format string, v ...interface{}) {
-	log.Println(fmt.Sprintf("[%s][DRAINER]", l.NodeName), fmt.Sprintf(format, v...))
+func (l drainLogger) Write(p []byte) (n int, err error) {
+	log.Printf("[%s][DRAINER] %s", l.NodeName, string(p))
+	return len(p), nil
 }
