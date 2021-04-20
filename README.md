@@ -125,7 +125,7 @@ subjects:
     name: aws-eks-asg-rolling-update-handler
     namespace: kube-system
 ---
-apiVersion: extensions/v1beta1
+apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: aws-eks-asg-rolling-update-handler
