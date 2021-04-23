@@ -10,6 +10,7 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 )
 
+// CreateClientSet Creates a Kubernetes ClientSet for authenticating with a cluster
 // If the current environment is dev, use the user's kubeconfig
 // If it isn't, then it means that the application is inside the cluster, which means
 // we'll use the service account token
