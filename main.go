@@ -18,9 +18,9 @@ import (
 )
 
 const (
-	MaximumFailedExecutionBeforePanic = 10
-	ExecutionInterval                 = 20 * time.Second
-	ExecutionTimeout                  = 15 * time.Minute
+	MaximumFailedExecutionBeforePanic = 10               // Maximum number of allowed failed executions before panicking
+	ExecutionInterval                 = 20 * time.Second // Duration to sleep between each execution
+	ExecutionTimeout                  = 15 * time.Minute // Maximum execution duration before timing out
 )
 
 var (
