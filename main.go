@@ -60,7 +60,7 @@ func run(ec2Service ec2iface.EC2API, autoScalingService autoscalingiface.AutoSca
 	cfg := config.Get()
 	client, err := k8s.CreateClientSet()
 	if err != nil {
-		return fmt.Errorf("unable to create Kubernetes client: %s", err.Error())
+		return errors.New("unable to create Kubernetes client: " + err.Error())
 	}
 	kubernetesClient := k8s.NewKubernetesClient(client)
 	if cfg.Debug {
@@ -68,16 +68,12 @@ func run(ec2Service ec2iface.EC2API, autoScalingService autoscalingiface.AutoSca
 	}
 	autoScalingGroups, err := cloud.DescribeAutoScalingGroupsByNames(autoScalingService, cfg.AutoScalingGroupNames)
 	if err != nil {
-		return fmt.Errorf("unable to describe AutoScalingGroups: %s", err.Error())
+		return errors.New("unable to describe AutoScalingGroups: " + err.Error())
 	}
 	if cfg.Debug {
 		log.Println("Described AutoScalingGroups successfully")
 	}
-	err = HandleRollingUpgrade(kubernetesClient, ec2Service, autoScalingService, autoScalingGroups)
-	if err != nil {
-		panic(err)
-	}
-	return nil
+	return HandleRollingUpgrade(kubernetesClient, ec2Service, autoScalingService, autoScalingGroups)
 }
 
 // HandleRollingUpgrade handles rolling upgrades.
