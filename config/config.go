@@ -14,7 +14,7 @@ const (
 	EnvDebug                 = "DEBUG"
 	EnvIgnoreDaemonSets      = "IGNORE_DAEMON_SETS"
 	EnvDeleteLocalData       = "DELETE_LOCAL_DATA"
-	EnvClusterName			 = "CLUSTER_NAME"
+	EnvClusterName           = "CLUSTER_NAME"
 	EnvAutoScalingGroupNames = "AUTO_SCALING_GROUP_NAMES"
 	EnvAwsRegion             = "AWS_REGION"
 )
