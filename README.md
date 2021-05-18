@@ -25,13 +25,13 @@ completely useless in the event that the ASG's update on the launch configuratio
 
 On interval, this application:
 1. Iterates over each ASG defined by the `AUTO_SCALING_GROUP_NAMES` environment variable
-2. Iterates over each instances of each ASGs
-3. Checks if there's any instances with an outdated launch template version
+2. Iterates over each instance of each ASGs
+3. Checks if there's any instance with an outdated launch template version
 4. **If ASG uses MixedInstancesPolicy**, checks if there's any instances with an instance type that isn't part of the list of instance type overrides
-5. Checks if there's any instances with an outdated launch configuration
+5. Checks if there's any instance with an outdated launch configuration
 6. If any of the conditions defined in the step 3, 4 or 5 are met for any instance, begin the rolling update process for that instance
 
-The steps of each actions are persisted directly on the old nodes (i.e. when the old node starts rolling out, gets drained, and gets scheduled for termination). Therefore, this application will not run into any issues if it is restarted, rescheduled or stopped at any point in time.
+The steps of each action are persisted directly on the old nodes (i.e. when the old node starts rolling out, gets drained, and gets scheduled for termination). Therefore, this application will not run into any issues if it is restarted, rescheduled or stopped at any point in time.
 
 
 ## Usage
@@ -58,6 +58,7 @@ To function properly, this application requires the following permissions on AWS
 - ec2:DescribeLaunchTemplates
 - ec2:DescribeInstances
 
+
 ## Deploying on Kubernetes
 
 ```yaml
@@ -68,7 +69,6 @@ metadata:
   namespace: kube-system
   labels:
     k8s-app: aws-eks-asg-rolling-update-handler
-  
 ---
 apiVersion: rbac.authorization.k8s.io/v1beta1
 kind: ClusterRole
@@ -151,6 +151,16 @@ spec:
           env:
             - name: AUTO_SCALING_GROUP_NAMES
               value: "asg-1,asg-2,asg-3" # REPLACE THESE VALUES FOR THE NAMES OF THE ASGs
+```
+
+
+## Deploying with Helm
+
+For the chart associated to this project, see [TwinProduction/helm-charts](https://github.com/TwinProduction/helm-charts):
+```sh
+helm repo add twinproduction https://twinproduction.github.io/helm-charts
+helm repo update
+helm install aws-eks-asg-rolling-update-handler twinproduction/aws-eks-asg-rolling-update-handler
 ```
 
 
