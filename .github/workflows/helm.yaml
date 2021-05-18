@@ -1,13 +1,13 @@
-name: release-helm-chart
-
+name: helm-chart
 on:
   push:
-    tags:
-      - '*'
-
+    branches:
+      - master
+#     tags:
+#       - '*'
 jobs:
   release:
-    name: Release Helm Chart
+    name: Helm Chart
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
