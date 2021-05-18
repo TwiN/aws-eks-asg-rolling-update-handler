@@ -1,0 +1,25 @@
+replicaCount: 1
+
+image:
+  repository: twinproduction/aws-eks-asg-rolling-update-handler
+  tag: v1.1.0
+  pullPolicy: IfNotPresent
+
+#imagePullSecrets:
+#- imagePullSecret
+
+environmentVars:
+- name: AUTO_SCALING_GROUP_NAMES
+  value: "asg-1,asg-2,asg-3" # REPLACE THESE VALUES FOR THE NAMES OF THE ASGs
+#- name: IGNORE_DAEMON_SETS
+#  value: "true"
+#- name: DELETE_LOCAL_DATA
+#  value: "true"
+#- name: AWS_REGION
+#  value: us-west-2
+#- name: ENVIRONMENT
+#  value: ""
+
+serviceAccount:
+  create: true
+  #name: aws-eks-asg-rolling-update-handler

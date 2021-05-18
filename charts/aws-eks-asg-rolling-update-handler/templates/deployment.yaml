@@ -1,0 +1,32 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: aws-eks-asg-rolling-update-handler
+  namespace: {{ template "aws-eks-asg-rolling-update-handler.namespace" . }}
+  labels:
+{{ include "aws-eks-asg-rolling-update-handler.labels" . | indent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+{{ include "aws-eks-asg-rolling-update-handler.labels" . | indent 6 }}
+  template:
+    metadata:
+      labels:
+{{ include "aws-eks-asg-rolling-update-handler.labels" . | indent 8 }}
+    spec:
+      automountServiceAccountToken: true
+      serviceAccountName: {{ template "aws-eks-asg-rolling-update-handler.serviceAccountName" . }}
+      restartPolicy: Always
+      dnsPolicy: Default
+      containers:
+        - name: {{ template "aws-eks-asg-rolling-update-handler.name" . }}
+          image: {{ .Values.image.repository }}:{{ .Values.image.tag }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          env:
+{{- toYaml .Values.environmentVars | nindent 12 }}
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+{{- toYaml . | nindent 8 }}
+      {{- end }}
