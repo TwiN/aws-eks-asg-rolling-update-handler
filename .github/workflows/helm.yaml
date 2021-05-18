@@ -6,7 +6,7 @@ on:
       - '*'
 
 jobs:
-  build-release:
+  release:
     name: Release Helm Chart
     runs-on: ubuntu-latest
     steps:
