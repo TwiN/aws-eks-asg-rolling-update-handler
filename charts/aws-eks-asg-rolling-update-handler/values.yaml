@@ -9,8 +9,10 @@ image:
 #- imagePullSecret
 
 environmentVars:
-- name: AUTO_SCALING_GROUP_NAMES
-  value: "asg-1,asg-2,asg-3" # REPLACE THESE VALUES FOR THE NAMES OF THE ASGs
+- name: CLUSTER_NAME
+  value: "eks-cluster" # REPLACE THIS WITH THE NAME OF YOU CLUSTER, AUTO_SCALING_GROUP_NAMES takes priority
+#- name: AUTO_SCALING_GROUP_NAMES
+#  value: "asg-1,asg-2,asg-3" # REPLACE THESE VALUES FOR THE NAMES OF THE ASGs
 #- name: IGNORE_DAEMON_SETS
 #  value: "true"
 #- name: DELETE_LOCAL_DATA

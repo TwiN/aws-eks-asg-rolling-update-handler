@@ -3,13 +3,13 @@ package cloud
 import (
 	"errors"
 	"fmt"
-
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/autoscaling"
 	"github.com/aws/aws-sdk-go/service/autoscaling/autoscalingiface"
 	"github.com/aws/aws-sdk-go/service/ec2"
 	"github.com/aws/aws-sdk-go/service/ec2/ec2iface"
+	"strings"
 )
 
 var (
@@ -33,6 +33,41 @@ func DescribeAutoScalingGroupsByNames(svc autoscalingiface.AutoScalingAPI, names
 		return nil, err
 	}
 	return result.AutoScalingGroups, nil
+}
+
+func filterAutoScalingGroupsByTag(autoScalingGroups []*autoscaling.Group, filter func([]*autoscaling.TagDescription) bool) (ret []*autoscaling.Group) {
+	for _, autoScalingGroup := range autoScalingGroups {
+		if filter(autoScalingGroup.Tags) {
+			ret = append(ret, autoScalingGroup)
+			break
+		}
+	}
+	return
+}
+
+// DescribeEnabledAutoScalingGroupsByClusterName Gets cluster AutoScalingGroups that are enabled
+// See: https://docs.aws.amazon.com/eks/latest/userguide/cluster-autoscaler.html
+func DescribeEnabledAutoScalingGroupsByClusterName(svc autoscalingiface.AutoScalingAPI, clusterName string) ([]*autoscaling.Group, error) {
+	input := &autoscaling.DescribeAutoScalingGroupsInput{}
+	var result []*autoscaling.Group
+	err := svc.DescribeAutoScalingGroupsPages(input, func(page *autoscaling.DescribeAutoScalingGroupsOutput, lastPage bool) bool {
+		tagFilter := func(tagDescriptions []*autoscaling.TagDescription) bool {
+			clusterNameTag := false
+			enabledTag := false
+			for _, tagDescription := range tagDescriptions {
+				clusterNameTag = clusterNameTag || (*tagDescription.Key == fmt.Sprintf("k8s.io/cluster-autoscaler/%s", clusterName) && *tagDescription.Value == "owned")
+				enabledTag = enabledTag || (*tagDescription.Key == "k8s.io/cluster-autoscaler/enabled" && strings.ToLower(*tagDescription.Value) == "true")
+			}
+			return clusterNameTag && enabledTag
+
+		}
+		result = append(result, filterAutoScalingGroupsByTag(page.AutoScalingGroups, tagFilter)...)
+		return !lastPage
+	})
+	if err != nil {
+		return nil, err
+	}
+	return result, nil
 }
 
 func DescribeLaunchTemplateByID(svc ec2iface.EC2API, id string) (*ec2.LaunchTemplate, error) {
