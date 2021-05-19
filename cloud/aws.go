@@ -3,6 +3,7 @@ package cloud
 import (
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
@@ -33,6 +34,40 @@ func DescribeAutoScalingGroupsByNames(svc autoscalingiface.AutoScalingAPI, names
 		return nil, err
 	}
 	return result.AutoScalingGroups, nil
+}
+
+func filterAutoScalingGroupsByTag(autoScalingGroups []*autoscaling.Group, filter func([]*autoscaling.TagDescription) bool) (ret []*autoscaling.Group) {
+	for _, autoScalingGroup := range autoScalingGroups {
+		if filter(autoScalingGroup.Tags) {
+			ret = append(ret, autoScalingGroup)
+		}
+	}
+	return
+}
+
+// DescribeEnabledAutoScalingGroupsByClusterName Gets cluster AutoScalingGroups that are enabled
+// See: https://docs.aws.amazon.com/eks/latest/userguide/cluster-autoscaler.html
+func DescribeEnabledAutoScalingGroupsByClusterName(svc autoscalingiface.AutoScalingAPI, clusterName string) ([]*autoscaling.Group, error) {
+	input := &autoscaling.DescribeAutoScalingGroupsInput{}
+	var result []*autoscaling.Group
+	err := svc.DescribeAutoScalingGroupsPages(input, func(page *autoscaling.DescribeAutoScalingGroupsOutput, lastPage bool) bool {
+		tagFilter := func(tagDescriptions []*autoscaling.TagDescription) bool {
+			clusterNameTag := false
+			enabledTag := false
+			for _, tagDescription := range tagDescriptions {
+				clusterNameTag = clusterNameTag || (aws.StringValue(tagDescription.Key) == fmt.Sprintf("k8s.io/cluster-autoscaler/%s", clusterName) && aws.StringValue(tagDescription.Value) == "owned")
+				enabledTag = enabledTag || (aws.StringValue(tagDescription.Key) == "k8s.io/cluster-autoscaler/enabled" && strings.ToLower(aws.StringValue(tagDescription.Value)) == "true")
+			}
+			return clusterNameTag && enabledTag
+
+		}
+		result = append(result, filterAutoScalingGroupsByTag(page.AutoScalingGroups, tagFilter)...)
+		return !lastPage
+	})
+	if err != nil {
+		return nil, err
+	}
+	return result, nil
 }
 
 func DescribeLaunchTemplateByID(svc ec2iface.EC2API, id string) (*ec2.LaunchTemplate, error) {

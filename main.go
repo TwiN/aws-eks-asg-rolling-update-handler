@@ -66,7 +66,13 @@ func run(ec2Service ec2iface.EC2API, autoScalingService autoscalingiface.AutoSca
 	if cfg.Debug {
 		log.Println("Created Kubernetes Client successfully")
 	}
-	autoScalingGroups, err := cloud.DescribeAutoScalingGroupsByNames(autoScalingService, cfg.AutoScalingGroupNames)
+
+	var autoScalingGroups []*autoscaling.Group
+	if len(cfg.ClusterName) > 0 {
+		autoScalingGroups, err = cloud.DescribeEnabledAutoScalingGroupsByClusterName(autoScalingService, cfg.ClusterName)
+	} else {
+		autoScalingGroups, err = cloud.DescribeAutoScalingGroupsByNames(autoScalingService, cfg.AutoScalingGroupNames)
+	}
 	if err != nil {
 		return errors.New("unable to describe AutoScalingGroups: " + err.Error())
 	}
