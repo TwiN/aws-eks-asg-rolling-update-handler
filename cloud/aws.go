@@ -55,8 +55,8 @@ func DescribeEnabledAutoScalingGroupsByClusterName(svc autoscalingiface.AutoScal
 			clusterNameTag := false
 			enabledTag := false
 			for _, tagDescription := range tagDescriptions {
-				clusterNameTag = clusterNameTag || (*tagDescription.Key == fmt.Sprintf("k8s.io/cluster-autoscaler/%s", clusterName) && *tagDescription.Value == "owned")
-				enabledTag = enabledTag || (*tagDescription.Key == "k8s.io/cluster-autoscaler/enabled" && strings.ToLower(*tagDescription.Value) == "true")
+				clusterNameTag = clusterNameTag || (aws.StringValue(tagDescription.Key) == fmt.Sprintf("k8s.io/cluster-autoscaler/%s", clusterName) && aws.StringValue(tagDescription.Value) == "owned")
+				enabledTag = enabledTag || (aws.StringValue(tagDescription.Key) == "k8s.io/cluster-autoscaler/enabled" && strings.ToLower(aws.StringValue(tagDescription.Value)) == "true")
 			}
 			return clusterNameTag && enabledTag
 
