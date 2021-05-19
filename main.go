@@ -68,10 +68,10 @@ func run(ec2Service ec2iface.EC2API, autoScalingService autoscalingiface.AutoSca
 	}
 
 	var autoScalingGroups []*autoscaling.Group
-	if len(cfg.AutoScalingGroupNames) > 0 {
-		autoScalingGroups, err = cloud.DescribeAutoScalingGroupsByNames(autoScalingService, cfg.AutoScalingGroupNames)
-	} else {
+	if len(cfg.ClusterName) > 0 {
 		autoScalingGroups, err = cloud.DescribeEnabledAutoScalingGroupsByClusterName(autoScalingService, cfg.ClusterName)
+	} else {
+		autoScalingGroups, err = cloud.DescribeAutoScalingGroupsByNames(autoScalingService, cfg.AutoScalingGroupNames)
 	}
 	if err != nil {
 		return errors.New("unable to describe AutoScalingGroups: " + err.Error())

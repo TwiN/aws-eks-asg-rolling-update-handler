@@ -48,10 +48,10 @@ func Initialize() error {
 		Environment: strings.ToLower(os.Getenv(EnvEnvironment)),
 		Debug:       strings.ToLower(os.Getenv(EnvDebug)) == "true",
 	}
-	if autoScalingGroupNames := os.Getenv(EnvAutoScalingGroupNames); len(autoScalingGroupNames) > 0 {
-		cfg.AutoScalingGroupNames = strings.Split(strings.TrimSpace(autoScalingGroupNames), ",")
-	} else if clusterName := os.Getenv(EnvClusterName); len(clusterName) > 0 {
+	if clusterName := os.Getenv(EnvClusterName); len(clusterName) > 0 {
 		cfg.ClusterName = clusterName
+	} else if autoScalingGroupNames := os.Getenv(EnvAutoScalingGroupNames); len(autoScalingGroupNames) > 0 {
+		cfg.AutoScalingGroupNames = strings.Split(strings.TrimSpace(autoScalingGroupNames), ",")
 	} else {
 		return fmt.Errorf("environment variables '%s' or '%s' are not set", EnvAutoScalingGroupNames, EnvClusterName)
 	}
