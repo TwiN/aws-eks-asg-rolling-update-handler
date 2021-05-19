@@ -28,6 +28,7 @@ func GetServices(awsRegion string) (ec2iface.EC2API, autoscalingiface.AutoScalin
 func DescribeAutoScalingGroupsByNames(svc autoscalingiface.AutoScalingAPI, names []string) ([]*autoscaling.Group, error) {
 	input := &autoscaling.DescribeAutoScalingGroupsInput{
 		AutoScalingGroupNames: aws.StringSlice(names),
+		MaxRecords:            aws.Int64(100),
 	}
 	result, err := svc.DescribeAutoScalingGroups(input)
 	if err != nil {
