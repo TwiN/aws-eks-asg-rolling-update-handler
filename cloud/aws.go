@@ -39,7 +39,6 @@ func filterAutoScalingGroupsByTag(autoScalingGroups []*autoscaling.Group, filter
 	for _, autoScalingGroup := range autoScalingGroups {
 		if filter(autoScalingGroup.Tags) {
 			ret = append(ret, autoScalingGroup)
-			break
 		}
 	}
 	return
