@@ -24,7 +24,7 @@ completely useless in the event that the ASG's update on the launch configuratio
 ## Behavior
 
 On interval, this application:
-1. Iterates over each ASG defined by the `AUTO_SCALING_GROUP_NAMES` environment variable
+1. Iterates over each ASG defined by the `AUTO_SCALING_GROUP_NAMES` environment variable, or each ASG that belong to the cluster if `CLUSTER_NAME` is specified
 2. Iterates over each instance of each ASGs
 3. Checks if there's any instance with an outdated launch template version
 4. **If ASG uses MixedInstancesPolicy**, checks if there's any instances with an instance type that isn't part of the list of instance type overrides
