@@ -34,6 +34,9 @@ On interval, this application:
 The steps of each action are persisted directly on the old nodes (i.e. when the old node starts rolling out, gets drained, and gets scheduled for termination). Therefore, this application will not run into any issues if it is restarted, rescheduled or stopped at any point in time.
 
 
+**NOTE**: Ensure that your PodDisruptionBudgets - if you have any - are properly configured. This usually means having at least 1 allowed disruption at all time (i.e. at least `minAvailable: 1` with at least 2 replicas OR `maxUnavailable: 1`)
+
+
 ## Usage
 
 | Environment variable | Description | Required | Default |
