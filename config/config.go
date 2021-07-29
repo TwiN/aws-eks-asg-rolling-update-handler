@@ -20,26 +20,13 @@ const (
 )
 
 type config struct {
-	// Optional
-	Environment string
-
-	// Defaults to false
-	Debug bool
-
-	// Required if ClusterName not provided
-	AutoScalingGroupNames []string
-
-	// Required if AutoScalingGroupNames not provided
-	ClusterName string
-
-	// Defaults to us-west-2
-	AwsRegion string
-
-	// Defaults to true
-	IgnoreDaemonSets bool
-
-	// Defaults to true
-	DeleteLocalData bool
+	Environment           string   // Optional
+	Debug                 bool     // Defaults to false
+	AutoScalingGroupNames []string // Required if ClusterName not provided
+	ClusterName           string   // Required if AutoScalingGroupNames not provided
+	AwsRegion             string   // Defaults to us-west-2
+	IgnoreDaemonSets      bool     // Defaults to true
+	DeleteLocalData       bool     // Defaults to true
 }
 
 // Initialize is used to initialize the application's configuration
