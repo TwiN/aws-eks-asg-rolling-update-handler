@@ -39,14 +39,14 @@ The steps of each action are persisted directly on the old nodes (i.e. when the 
 
 ## Usage
 
-| Environment variable | Description | Required | Default |
-| --- | --- | --- | --- |
-| CLUSTER_NAME | Name of the eks-cluster, used in place of AUTO_SCALING_GROUP_NAMES. Checks for `k8s.io/cluster-autoscaler/<CLUSTER_NAME>: owned` and `k8s.io/cluster-autoscaler/enabled: true` tags on ASG | yes | `""` |
+| Environment variable     | Description | Required | Default |
+|:------------------------ |:----------- |:-------- |:------- |
+| CLUSTER_NAME             | Name of the eks-cluster, used in place of AUTO_SCALING_GROUP_NAMES. Checks for `k8s.io/cluster-autoscaler/<CLUSTER_NAME>: owned` and `k8s.io/cluster-autoscaler/enabled: true` tags on ASG | yes | `""` |
 | AUTO_SCALING_GROUP_NAMES | Comma-separated list of ASGs, CLUSTER_NAME takes priority. | yes | `""` |
-| IGNORE_DAEMON_SETS | Whether to ignore DaemonSets when draining the nodes | no | `true` |
-| DELETE_LOCAL_DATA | Whether to delete local data when draining the nodes | no | `true` |
-| AWS_REGION | Self-explanatory | no | `us-west-2` |
-| ENVIRONMENT | If set to `dev`, will try to create the Kubernetes client using your local kubeconfig. Any other values will use the in-cluster configuration | no | `""` |
+| IGNORE_DAEMON_SETS       | Whether to ignore DaemonSets when draining the nodes | no | `true` |
+| DELETE_LOCAL_DATA        | Whether to delete local data when draining the nodes | no | `true` |
+| AWS_REGION               | Self-explanatory | no | `us-west-2` |
+| ENVIRONMENT              | If set to `dev`, will try to create the Kubernetes client using your local kubeconfig. Any other values will use the in-cluster configuration | no | `""` |
 
 
 ## Permissions
