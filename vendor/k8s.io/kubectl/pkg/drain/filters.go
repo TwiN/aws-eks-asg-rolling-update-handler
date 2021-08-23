@@ -31,40 +31,36 @@ import (
 const (
 	daemonSetFatal      = "DaemonSet-managed Pods (use --ignore-daemonsets to ignore)"
 	daemonSetWarning    = "ignoring DaemonSet-managed Pods"
-	localStorageFatal   = "Pods with local storage (use --delete-emptydir-data to override)"
+	localStorageFatal   = "Pods with local storage (use --delete-local-data to override)"
 	localStorageWarning = "deleting Pods with local storage"
 	unmanagedFatal      = "Pods not managed by ReplicationController, ReplicaSet, Job, DaemonSet or StatefulSet (use --force to override)"
 	unmanagedWarning    = "deleting Pods not managed by ReplicationController, ReplicaSet, Job, DaemonSet or StatefulSet"
 )
 
-// PodDelete informs filtering logic whether a pod should be deleted or not
-type PodDelete struct {
-	Pod    corev1.Pod
-	Status PodDeleteStatus
+type podDelete struct {
+	pod    corev1.Pod
+	status podDeleteStatus
 }
 
-// PodDeleteList is a wrapper around []PodDelete
-type PodDeleteList struct {
-	items []PodDelete
+type podDeleteList struct {
+	items []podDelete
 }
 
-// Pods returns a list of all pods marked for deletion after filtering.
-func (l *PodDeleteList) Pods() []corev1.Pod {
+func (l *podDeleteList) Pods() []corev1.Pod {
 	pods := []corev1.Pod{}
 	for _, i := range l.items {
-		if i.Status.Delete {
-			pods = append(pods, i.Pod)
+		if i.status.delete {
+			pods = append(pods, i.pod)
 		}
 	}
 	return pods
 }
 
-// Warnings returns all warning messages concatenated into a string.
-func (l *PodDeleteList) Warnings() string {
+func (l *podDeleteList) Warnings() string {
 	ps := make(map[string][]string)
 	for _, i := range l.items {
-		if i.Status.Reason == PodDeleteStatusTypeWarning {
-			ps[i.Status.Message] = append(ps[i.Status.Message], fmt.Sprintf("%s/%s", i.Pod.Namespace, i.Pod.Name))
+		if i.status.reason == podDeleteStatusTypeWarning {
+			ps[i.status.message] = append(ps[i.status.message], fmt.Sprintf("%s/%s", i.pod.Namespace, i.pod.Name))
 		}
 	}
 
@@ -75,90 +71,80 @@ func (l *PodDeleteList) Warnings() string {
 	return strings.Join(msgs, "; ")
 }
 
-func (l *PodDeleteList) errors() []error {
+func (l *podDeleteList) errors() []error {
 	failedPods := make(map[string][]string)
 	for _, i := range l.items {
-		if i.Status.Reason == PodDeleteStatusTypeError {
-			msg := i.Status.Message
+		if i.status.reason == podDeleteStatusTypeError {
+			msg := i.status.message
 			if msg == "" {
 				msg = "unexpected error"
 			}
-			failedPods[msg] = append(failedPods[msg], fmt.Sprintf("%s/%s", i.Pod.Namespace, i.Pod.Name))
+			failedPods[msg] = append(failedPods[msg], fmt.Sprintf("%s/%s", i.pod.Namespace, i.pod.Name))
 		}
 	}
-	errs := make([]error, 0, len(failedPods))
+	errs := make([]error, 0)
 	for msg, pods := range failedPods {
 		errs = append(errs, fmt.Errorf("cannot delete %s: %s", msg, strings.Join(pods, ", ")))
 	}
 	return errs
 }
 
-// PodDeleteStatus informs filters if a pod should be deleted
-type PodDeleteStatus struct {
-	Delete  bool
-	Reason  string
-	Message string
+type podDeleteStatus struct {
+	delete  bool
+	reason  string
+	message string
 }
 
-// PodFilter takes a pod and returns a PodDeleteStatus
-type PodFilter func(corev1.Pod) PodDeleteStatus
+// Takes a pod and returns a PodDeleteStatus
+type podFilter func(corev1.Pod) podDeleteStatus
 
 const (
-	// PodDeleteStatusTypeOkay is "Okay"
-	PodDeleteStatusTypeOkay = "Okay"
-	// PodDeleteStatusTypeSkip is "Skip"
-	PodDeleteStatusTypeSkip = "Skip"
-	// PodDeleteStatusTypeWarning is "Warning"
-	PodDeleteStatusTypeWarning = "Warning"
-	// PodDeleteStatusTypeError is "Error"
-	PodDeleteStatusTypeError = "Error"
+	podDeleteStatusTypeOkay    = "Okay"
+	podDeleteStatusTypeSkip    = "Skip"
+	podDeleteStatusTypeWarning = "Warning"
+	podDeleteStatusTypeError   = "Error"
 )
 
-// MakePodDeleteStatusOkay is a helper method to return the corresponding PodDeleteStatus
-func MakePodDeleteStatusOkay() PodDeleteStatus {
-	return PodDeleteStatus{
-		Delete: true,
-		Reason: PodDeleteStatusTypeOkay,
+func makePodDeleteStatusOkay() podDeleteStatus {
+	return podDeleteStatus{
+		delete: true,
+		reason: podDeleteStatusTypeOkay,
 	}
 }
 
-// MakePodDeleteStatusSkip is a helper method to return the corresponding PodDeleteStatus
-func MakePodDeleteStatusSkip() PodDeleteStatus {
-	return PodDeleteStatus{
-		Delete: false,
-		Reason: PodDeleteStatusTypeSkip,
+func makePodDeleteStatusSkip() podDeleteStatus {
+	return podDeleteStatus{
+		delete: false,
+		reason: podDeleteStatusTypeSkip,
 	}
 }
 
-// MakePodDeleteStatusWithWarning is a helper method to return the corresponding PodDeleteStatus
-func MakePodDeleteStatusWithWarning(delete bool, message string) PodDeleteStatus {
-	return PodDeleteStatus{
-		Delete:  delete,
-		Reason:  PodDeleteStatusTypeWarning,
-		Message: message,
+func makePodDeleteStatusWithWarning(delete bool, message string) podDeleteStatus {
+	return podDeleteStatus{
+		delete:  delete,
+		reason:  podDeleteStatusTypeWarning,
+		message: message,
 	}
 }
 
-// MakePodDeleteStatusWithError is a helper method to return the corresponding PodDeleteStatus
-func MakePodDeleteStatusWithError(message string) PodDeleteStatus {
-	return PodDeleteStatus{
-		Delete:  false,
-		Reason:  PodDeleteStatusTypeError,
-		Message: message,
+func makePodDeleteStatusWithError(message string) podDeleteStatus {
+	return podDeleteStatus{
+		delete:  false,
+		reason:  podDeleteStatusTypeError,
+		message: message,
 	}
 }
 
 // The filters are applied in a specific order, only the last filter's
 // message will be retained if there are any warnings.
-func (d *Helper) makeFilters() []PodFilter {
-	baseFilters := []PodFilter{
+func (d *Helper) makeFilters() []podFilter {
+	return []podFilter{
 		d.skipDeletedFilter,
 		d.daemonSetFilter,
 		d.mirrorPodFilter,
 		d.localStorageFilter,
 		d.unreplicatedFilter,
 	}
-	return append(baseFilters, d.AdditionalFilters...)
 }
 
 func hasLocalStorage(pod corev1.Pod) bool {
@@ -171,7 +157,7 @@ func hasLocalStorage(pod corev1.Pod) bool {
 	return false
 }
 
-func (d *Helper) daemonSetFilter(pod corev1.Pod) PodDeleteStatus {
+func (d *Helper) daemonSetFilter(pod corev1.Pod) podDeleteStatus {
 	// Note that we return false in cases where the pod is DaemonSet managed,
 	// regardless of flags.
 	//
@@ -180,68 +166,68 @@ func (d *Helper) daemonSetFilter(pod corev1.Pod) PodDeleteStatus {
 	// Such pods will be deleted if --force is used.
 	controllerRef := metav1.GetControllerOf(&pod)
 	if controllerRef == nil || controllerRef.Kind != appsv1.SchemeGroupVersion.WithKind("DaemonSet").Kind {
-		return MakePodDeleteStatusOkay()
+		return makePodDeleteStatusOkay()
 	}
 	// Any finished pod can be removed.
 	if pod.Status.Phase == corev1.PodSucceeded || pod.Status.Phase == corev1.PodFailed {
-		return MakePodDeleteStatusOkay()
+		return makePodDeleteStatusOkay()
 	}
 
 	if _, err := d.Client.AppsV1().DaemonSets(pod.Namespace).Get(context.TODO(), controllerRef.Name, metav1.GetOptions{}); err != nil {
 		// remove orphaned pods with a warning if --force is used
 		if apierrors.IsNotFound(err) && d.Force {
-			return MakePodDeleteStatusWithWarning(true, err.Error())
+			return makePodDeleteStatusWithWarning(true, err.Error())
 		}
 
-		return MakePodDeleteStatusWithError(err.Error())
+		return makePodDeleteStatusWithError(err.Error())
 	}
 
 	if !d.IgnoreAllDaemonSets {
-		return MakePodDeleteStatusWithError(daemonSetFatal)
+		return makePodDeleteStatusWithError(daemonSetFatal)
 	}
 
-	return MakePodDeleteStatusWithWarning(false, daemonSetWarning)
+	return makePodDeleteStatusWithWarning(false, daemonSetWarning)
 }
 
-func (d *Helper) mirrorPodFilter(pod corev1.Pod) PodDeleteStatus {
+func (d *Helper) mirrorPodFilter(pod corev1.Pod) podDeleteStatus {
 	if _, found := pod.ObjectMeta.Annotations[corev1.MirrorPodAnnotationKey]; found {
-		return MakePodDeleteStatusSkip()
+		return makePodDeleteStatusSkip()
 	}
-	return MakePodDeleteStatusOkay()
+	return makePodDeleteStatusOkay()
 }
 
-func (d *Helper) localStorageFilter(pod corev1.Pod) PodDeleteStatus {
+func (d *Helper) localStorageFilter(pod corev1.Pod) podDeleteStatus {
 	if !hasLocalStorage(pod) {
-		return MakePodDeleteStatusOkay()
+		return makePodDeleteStatusOkay()
 	}
 	// Any finished pod can be removed.
 	if pod.Status.Phase == corev1.PodSucceeded || pod.Status.Phase == corev1.PodFailed {
-		return MakePodDeleteStatusOkay()
+		return makePodDeleteStatusOkay()
 	}
-	if !d.DeleteEmptyDirData {
-		return MakePodDeleteStatusWithError(localStorageFatal)
+	if !d.DeleteLocalData {
+		return makePodDeleteStatusWithError(localStorageFatal)
 	}
 
 	// TODO: this warning gets dropped by subsequent filters;
 	// consider accounting for multiple warning conditions or at least
 	// preserving the last warning message.
-	return MakePodDeleteStatusWithWarning(true, localStorageWarning)
+	return makePodDeleteStatusWithWarning(true, localStorageWarning)
 }
 
-func (d *Helper) unreplicatedFilter(pod corev1.Pod) PodDeleteStatus {
+func (d *Helper) unreplicatedFilter(pod corev1.Pod) podDeleteStatus {
 	// any finished pod can be removed
 	if pod.Status.Phase == corev1.PodSucceeded || pod.Status.Phase == corev1.PodFailed {
-		return MakePodDeleteStatusOkay()
+		return makePodDeleteStatusOkay()
 	}
 
 	controllerRef := metav1.GetControllerOf(&pod)
 	if controllerRef != nil {
-		return MakePodDeleteStatusOkay()
+		return makePodDeleteStatusOkay()
 	}
 	if d.Force {
-		return MakePodDeleteStatusWithWarning(true, unmanagedWarning)
+		return makePodDeleteStatusWithWarning(true, unmanagedWarning)
 	}
-	return MakePodDeleteStatusWithError(unmanagedFatal)
+	return makePodDeleteStatusWithError(unmanagedFatal)
 }
 
 func shouldSkipPod(pod corev1.Pod, skipDeletedTimeoutSeconds int) bool {
@@ -250,9 +236,9 @@ func shouldSkipPod(pod corev1.Pod, skipDeletedTimeoutSeconds int) bool {
 		int(time.Now().Sub(pod.ObjectMeta.GetDeletionTimestamp().Time).Seconds()) > skipDeletedTimeoutSeconds
 }
 
-func (d *Helper) skipDeletedFilter(pod corev1.Pod) PodDeleteStatus {
+func (d *Helper) skipDeletedFilter(pod corev1.Pod) podDeleteStatus {
 	if shouldSkipPod(pod, d.SkipWaitForDeleteTimeoutSeconds) {
-		return MakePodDeleteStatusSkip()
+		return makePodDeleteStatusSkip()
 	}
-	return MakePodDeleteStatusOkay()
+	return makePodDeleteStatusOkay()
 }

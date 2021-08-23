@@ -113,7 +113,7 @@ func (k *KubernetesClient) Drain(nodeName string, ignoreDaemonSets, deleteLocalD
 		Client:              k.client,
 		Force:               true,
 		IgnoreAllDaemonSets: ignoreDaemonSets,
-		DeleteEmptyDirData:  deleteLocalData,
+		DeleteLocalData:     deleteLocalData,
 		GracePeriodSeconds:  -1,
 		Timeout:             5 * time.Minute,
 		Out:                 drainLogger{NodeName: nodeName},

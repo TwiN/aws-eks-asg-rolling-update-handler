@@ -20,7 +20,7 @@ import (
 	"k8s.io/cli-runtime/pkg/resource"
 )
 
-// NewSimpleFakeResourceFinder builds a super simple ResourceFinder that just iterates over the objects you provided
+// NewSimpleResourceFinder builds a super simple ResourceFinder that just iterates over the objects you provided
 func NewSimpleFakeResourceFinder(infos ...*resource.Info) ResourceFinder {
 	return &fakeResourceFinder{
 		Infos: infos,

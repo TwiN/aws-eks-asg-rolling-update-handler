@@ -22,11 +22,15 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/apimachinery/pkg/runtime/serializer/json"
 	"k8s.io/apimachinery/pkg/runtime/serializer/versioning"
 )
 
-var scheme = runtime.NewScheme()
+var (
+	scheme = runtime.NewScheme()
+	codecs = serializer.NewCodecFactory(scheme)
+)
 
 // NewUnstructuredNegotiatedSerializer returns a simple, negotiated serializer
 func NewUnstructuredNegotiatedSerializer() runtime.NegotiatedSerializer {

@@ -24,7 +24,7 @@ import (
 )
 
 // hold a single instance of the case-sensitive decoder
-var caseSensitiveJsonIterator = json.CaseSensitiveJSONIterator()
+var caseSensitiveJsonIterator = json.CaseSensitiveJsonIterator()
 
 // metadataValidatingDecoder wraps a decoder and additionally ensures metadata schema fields decode before returning an unstructured object
 type metadataValidatingDecoder struct {
