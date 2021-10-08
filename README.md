@@ -161,9 +161,9 @@ spec:
 
 For the chart associated to this project, see [TwiN/helm-charts](https://github.com/TwiN/helm-charts):
 ```sh
-helm repo add twinproduction https://twinproduction.github.io/helm-charts
+helm repo add twin https://twin.github.io/helm-charts
 helm repo update
-helm install aws-eks-asg-rolling-update-handler twinproduction/aws-eks-asg-rolling-update-handler
+helm install aws-eks-asg-rolling-update-handler twin/aws-eks-asg-rolling-update-handler
 ```
 
 
