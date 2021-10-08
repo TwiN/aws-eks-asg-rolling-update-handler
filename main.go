@@ -6,9 +6,9 @@ import (
 	"log"
 	"time"
 
-	"github.com/TwinProduction/aws-eks-asg-rolling-update-handler/cloud"
-	"github.com/TwinProduction/aws-eks-asg-rolling-update-handler/config"
-	"github.com/TwinProduction/aws-eks-asg-rolling-update-handler/k8s"
+	"github.com/TwiN/aws-eks-asg-rolling-update-handler/cloud"
+	"github.com/TwiN/aws-eks-asg-rolling-update-handler/config"
+	"github.com/TwiN/aws-eks-asg-rolling-update-handler/k8s"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/autoscaling"
 	"github.com/aws/aws-sdk-go/service/autoscaling/autoscalingiface"

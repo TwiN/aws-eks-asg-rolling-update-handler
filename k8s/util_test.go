@@ -3,7 +3,7 @@ package k8s
 import (
 	"testing"
 
-	"github.com/TwinProduction/aws-eks-asg-rolling-update-handler/k8stest"
+	"github.com/TwiN/aws-eks-asg-rolling-update-handler/k8stest"
 	"k8s.io/api/core/v1"
 )
 

@@ -1,4 +1,4 @@
-module github.com/TwinProduction/aws-eks-asg-rolling-update-handler
+module github.com/TwiN/aws-eks-asg-rolling-update-handler
 
 go 1.16
 

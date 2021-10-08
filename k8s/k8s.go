@@ -4,7 +4,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/TwinProduction/aws-eks-asg-rolling-update-handler/config"
+	"github.com/TwiN/aws-eks-asg-rolling-update-handler/config"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"

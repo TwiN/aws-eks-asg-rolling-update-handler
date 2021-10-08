@@ -3,9 +3,9 @@ package main
 import (
 	"testing"
 
-	"github.com/TwinProduction/aws-eks-asg-rolling-update-handler/cloudtest"
-	"github.com/TwinProduction/aws-eks-asg-rolling-update-handler/k8s"
-	"github.com/TwinProduction/aws-eks-asg-rolling-update-handler/k8stest"
+	"github.com/TwiN/aws-eks-asg-rolling-update-handler/cloudtest"
+	"github.com/TwiN/aws-eks-asg-rolling-update-handler/k8s"
+	"github.com/TwiN/aws-eks-asg-rolling-update-handler/k8stest"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/autoscaling"
 	"github.com/aws/aws-sdk-go/service/ec2"
