@@ -6,6 +6,7 @@ import (
 	"log"
 	"time"
 
+	"github.com/TwiN/gocache/v2"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/autoscaling"
 	"k8s.io/api/core/v1"
@@ -18,6 +19,12 @@ const (
 	RollingUpdateStartedTimestampAnnotationKey    = "aws-eks-asg-rolling-update-handler/started-at"
 	RollingUpdateDrainedTimestampAnnotationKey    = "aws-eks-asg-rolling-update-handler/drained-at"
 	RollingUpdateTerminatedTimestampAnnotationKey = "aws-eks-asg-rolling-update-handler/terminated-at"
+
+	nodesCacheKey = "nodes"
+)
+
+var (
+	cache = gocache.NewCache().WithMaxSize(1000).WithEvictionPolicy(gocache.LeastRecentlyUsed)
 )
 
 type KubernetesClientApi interface {
@@ -42,10 +49,21 @@ func NewKubernetesClient(client *kubernetes.Clientset) *KubernetesClient {
 
 // GetNodes retrieves all nodes from the cluster
 func (k *KubernetesClient) GetNodes() ([]v1.Node, error) {
+	nodes, exists := cache.Get(nodesCacheKey)
+	if exists {
+		if v1Nodes, ok := nodes.([]v1.Node); ok {
+			// Return cached nodes
+			return v1Nodes, nil
+		} else {
+			log.Println("[k8s.GetNodes] Failed to cast cached nodes to []v1.Node; retrieving nodes from API instead")
+			cache.Delete(nodesCacheKey)
+		}
+	}
 	nodeList, err := k.client.CoreV1().Nodes().List(context.TODO(), metav1.ListOptions{})
 	if err != nil {
 		return nil, err
 	}
+	cache.SetWithTTL(nodesCacheKey, nodeList.Items, 10*time.Second)
 	return nodeList.Items, nil
 }
 

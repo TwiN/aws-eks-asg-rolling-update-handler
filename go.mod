@@ -3,6 +3,7 @@ module github.com/TwiN/aws-eks-asg-rolling-update-handler
 go 1.16
 
 require (
+	github.com/TwiN/gocache/v2 v2.0.0
 	github.com/aws/aws-sdk-go v1.36.5
 	github.com/google/gofuzz v1.2.0 // indirect
 	github.com/googleapis/gnostic v0.5.3 // indirect
