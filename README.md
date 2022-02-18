@@ -14,7 +14,7 @@ Unlike aws-asg-roller, it will not attempt to control the amount of nodes at all
 to move the pods from the old nodes to the new nodes, and then evict the old nodes. 
 
 It will not adjust the desired size back to its initial desired size like aws-asg-roller does, it will simply leave
-everything else will be up to cluster-autoscaler.
+everything else up to cluster-autoscaler.
 
 Note that unlike other solutions, this application actually uses the resources to determine how many instances should 
 be spun up before draining the old nodes. This is much better, because simply using the initial number of instances is 
@@ -25,13 +25,14 @@ completely useless in the event that the ASG's update on the launch configuratio
 
 On interval, this application:
 1. Iterates over each ASG defined by the `AUTO_SCALING_GROUP_NAMES` environment variable, or each ASG that belong to the cluster if `CLUSTER_NAME` is specified
-2. Iterates over each instance of each ASGs
+2. Iterates over each instance of each ASG
 3. Checks if there's any instance with an outdated launch template version
 4. **If ASG uses MixedInstancesPolicy**, checks if there's any instances with an instance type that isn't part of the list of instance type overrides
 5. Checks if there's any instance with an outdated launch configuration
 6. If any of the conditions defined in the step 3, 4 or 5 are met for any instance, begin the rolling update process for that instance
 
-The steps of each action are persisted directly on the old nodes (i.e. when the old node starts rolling out, gets drained, and gets scheduled for termination). Therefore, this application will not run into any issues if it is restarted, rescheduled or stopped at any point in time.
+The steps of each action are persisted directly on the old nodes via annotations (i.e. when the old node starts rolling out, gets drained, and gets scheduled for termination).
+Therefore, this application will not run into any issues if it is restarted, rescheduled or stopped at any point in time.
 
 
 **NOTE**: Ensure that your PodDisruptionBudgets - if you have any - are properly configured. This usually means having at least 1 allowed disruption at all time (i.e. at least `minAvailable: 1` with at least 2 replicas OR `maxUnavailable: 1`)
