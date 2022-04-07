@@ -2,8 +2,7 @@
 FROM golang:alpine as builder
 WORKDIR /app
 ADD . ./
-RUN apk add git
-RUN CGO_ENABLED=0 GOOS=linux go build -mod vendor -a -installsuffix cgo -o aws-eks-asg-rolling-update-handler .
+RUN CGO_ENABLED=0 GOOS=linux go build -buildvcs=false -a -installsuffix cgo -o aws-eks-asg-rolling-update-handler .
 RUN apk --update add ca-certificates
 
 # Run the binary on an empty container
