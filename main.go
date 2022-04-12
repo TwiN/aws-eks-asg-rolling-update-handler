@@ -14,7 +14,7 @@ import (
 	"github.com/aws/aws-sdk-go/service/autoscaling/autoscalingiface"
 	"github.com/aws/aws-sdk-go/service/ec2"
 	"github.com/aws/aws-sdk-go/service/ec2/ec2iface"
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 )
 
 const (
@@ -68,8 +68,8 @@ func run(ec2Service ec2iface.EC2API, autoScalingService autoscalingiface.AutoSca
 	}
 
 	var autoScalingGroups []*autoscaling.Group
-	if len(cfg.ClusterName) > 0 {
-		autoScalingGroups, err = cloud.DescribeEnabledAutoScalingGroupsByClusterName(autoScalingService, cfg.ClusterName)
+	if len(cfg.AutodiscoveryTags) > 0 {
+		autoScalingGroups, err = cloud.DescribeEnabledAutoScalingGroupsByTags(autoScalingService, cfg.AutodiscoveryTags)
 	} else {
 		autoScalingGroups, err = cloud.DescribeAutoScalingGroupsByNames(autoScalingService, cfg.AutoScalingGroupNames)
 	}

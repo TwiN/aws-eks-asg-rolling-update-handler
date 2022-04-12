@@ -24,7 +24,7 @@ completely useless in the event that the ASG's update on the launch configuratio
 ## Behavior
 
 On interval, this application:
-1. Iterates over each ASG defined by the `AUTO_SCALING_GROUP_NAMES` environment variable, or each ASG that belong to the cluster if `CLUSTER_NAME` is specified
+1. Iterates over each ASG defined by the `AUTO_SCALING_GROUP_NAMES` environment variable, or each ASG that matches the tags specified in `AUTODISCOVERY_TAGS`.
 2. Iterates over each instance of each ASG
 3. Checks if there's any instance with an outdated launch template version
 4. **If ASG uses MixedInstancesPolicy**, checks if there's any instances with an instance type that isn't part of the list of instance type overrides
@@ -42,7 +42,7 @@ Therefore, this application will not run into any issues if it is restarted, res
 
 | Environment variable     | Description | Required | Default |
 |:------------------------ |:----------- |:-------- |:------- |
-| CLUSTER_NAME             | Name of the eks-cluster, used in place of AUTO_SCALING_GROUP_NAMES. Checks for `k8s.io/cluster-autoscaler/<CLUSTER_NAME>: owned` and `k8s.io/cluster-autoscaler/enabled: true` tags on ASG | yes | `""` |
+| AUTODISCOVERY_TAGS       | Comma separated key value string with tags to autodiscover ASGs, used in place of AUTO_SCALING_GROUP_NAMES. | yes | `""` |
 | AUTO_SCALING_GROUP_NAMES | Comma-separated list of ASGs, CLUSTER_NAME takes priority. | yes | `""` |
 | IGNORE_DAEMON_SETS       | Whether to ignore DaemonSets when draining the nodes | no | `true` |
 | DELETE_LOCAL_DATA        | Whether to delete local data when draining the nodes | no | `true` |
