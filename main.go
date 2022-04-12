@@ -246,6 +246,7 @@ func getReadyNodesAndNumberOfNonReadyNodesOrInstances(updatedInstances []*autosc
 		} else {
 			log.Printf("[%s][%s] Skipping because expected kubelet on node to have condition %s with value %s, but it didn't", aws.StringValue(autoScalingGroup.AutoScalingGroupName), aws.StringValue(updatedInstance.InstanceId), v1.NodeReady, v1.ConditionTrue)
 			numberOfNonReadyNodesOrInstances++
+		}
 
 		// Cleaning up
 		// This is an edge case, but it may happen that an ASG's launch template is modified, creating a new
