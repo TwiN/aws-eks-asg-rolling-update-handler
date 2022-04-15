@@ -14,7 +14,7 @@ import (
 	"github.com/aws/aws-sdk-go/service/autoscaling/autoscalingiface"
 	"github.com/aws/aws-sdk-go/service/ec2"
 	"github.com/aws/aws-sdk-go/service/ec2/ec2iface"
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 )
 
 const (
@@ -236,11 +236,18 @@ func getReadyNodesAndNumberOfNonReadyNodesOrInstances(updatedInstances []*autosc
 		if len(conditions) == 0 {
 			log.Printf("[%s][%s] For some magical reason, %s doesn't have any conditions, therefore it is impossible to determine whether the node is ready to accept new pods or not", aws.StringValue(autoScalingGroup.AutoScalingGroupName), aws.StringValue(updatedInstance.InstanceId), updatedNode.Name)
 			numberOfNonReadyNodesOrInstances++
-		} else if kubeletCondition := conditions[len(conditions)-1]; kubeletCondition.Type == v1.NodeReady && kubeletCondition.Status == v1.ConditionTrue {
-			updatedReadyNodes = append(updatedReadyNodes, updatedNode)
+		} else if kubeletCondition := conditions[len(conditions)-1]; kubeletCondition.Type == v1.NodeReady {
+			if kubeletCondition.Status == v1.ConditionTrue {
+				updatedReadyNodes = append(updatedReadyNodes, updatedNode)
+			} else {
+				log.Printf("[%s][%s] Skipping because kubelet condition %s is reporting as %s", aws.StringValue(autoScalingGroup.AutoScalingGroupName), aws.StringValue(updatedInstance.InstanceId), kubeletCondition.Type, kubeletCondition.Status)
+				numberOfNonReadyNodesOrInstances++
+			}
 		} else {
+			log.Printf("[%s][%s] Skipping because expected kubelet on node to have condition %s with value %s, but it didn't", aws.StringValue(autoScalingGroup.AutoScalingGroupName), aws.StringValue(updatedInstance.InstanceId), v1.NodeReady, v1.ConditionTrue)
 			numberOfNonReadyNodesOrInstances++
 		}
+
 		// Cleaning up
 		// This is an edge case, but it may happen that an ASG's launch template is modified, creating a new
 		// template version, but then that new template version is deleted before the node has been terminated.
