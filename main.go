@@ -14,7 +14,7 @@ import (
 	"github.com/aws/aws-sdk-go/service/autoscaling/autoscalingiface"
 	"github.com/aws/aws-sdk-go/service/ec2"
 	"github.com/aws/aws-sdk-go/service/ec2/ec2iface"
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 )
 
 const (
@@ -326,7 +326,7 @@ func SeparateOutdatedFromUpdatedInstances(asg *autoscaling.Group, ec2Svc ec2ifac
 		targetLaunchTemplateOverrides = asg.MixedInstancesPolicy.LaunchTemplate.Overrides
 	}
 	if targetLaunchTemplate != nil {
-		return SeparateOutdatedFromUpdatedInstancesUsingLaunchTemplate(targetLaunchTemplate, targetLaunchTemplateOverrides, asg.Instances, ec2Svc)
+		return SeparateOutdatedFromUpdatedInstancesUsingLaunchTemplate(aws.StringValue(asg.AutoScalingGroupName), targetLaunchTemplate, targetLaunchTemplateOverrides, asg.Instances, ec2Svc)
 	} else if targetLaunchConfiguration != nil {
 		return SeparateOutdatedFromUpdatedInstancesUsingLaunchConfiguration(targetLaunchConfiguration, asg.Instances)
 	}
@@ -335,7 +335,7 @@ func SeparateOutdatedFromUpdatedInstances(asg *autoscaling.Group, ec2Svc ec2ifac
 
 // SeparateOutdatedFromUpdatedInstancesUsingLaunchTemplate separates a list of instances into a list of outdated
 // instances and a list of updated instances.
-func SeparateOutdatedFromUpdatedInstancesUsingLaunchTemplate(targetLaunchTemplate *autoscaling.LaunchTemplateSpecification, overrides []*autoscaling.LaunchTemplateOverrides, instances []*autoscaling.Instance, ec2Svc ec2iface.EC2API) ([]*autoscaling.Instance, []*autoscaling.Instance, error) {
+func SeparateOutdatedFromUpdatedInstancesUsingLaunchTemplate(asgName string, targetLaunchTemplate *autoscaling.LaunchTemplateSpecification, overrides []*autoscaling.LaunchTemplateOverrides, instances []*autoscaling.Instance, ec2Svc ec2iface.EC2API) ([]*autoscaling.Instance, []*autoscaling.Instance, error) {
 	var (
 		oldInstances   []*autoscaling.Instance
 		newInstances   []*autoscaling.Instance
@@ -360,6 +360,24 @@ func SeparateOutdatedFromUpdatedInstancesUsingLaunchTemplate(targetLaunchTemplat
 	}
 	// now we can loop through each node and compare
 	for _, instance := range instances {
+		if isInstanceTypePartOfLaunchTemplateOverrides(overrides, instance.InstanceType) {
+			var (
+				overrideTargetTemplate       *ec2.LaunchTemplate
+				overrideTargetLaunchTemplate *autoscaling.LaunchTemplateSpecification
+			)
+			for _, override := range overrides {
+				if aws.StringValue(override.InstanceType) == aws.StringValue(instance.InstanceType) && override.LaunchTemplateSpecification != nil {
+					if overrideTargetTemplate, err = cloud.DescribeLaunchTemplateByName(ec2Svc, aws.StringValue(override.LaunchTemplateSpecification.LaunchTemplateName)); err != nil {
+						log.Printf("[%s][%s] Unable to retrieve launch template information: %v", asgName, aws.StringValue(override.LaunchTemplateSpecification.LaunchTemplateName), err)
+					}
+					overrideTargetLaunchTemplate = override.LaunchTemplateSpecification
+				}
+			}
+			if overrideTargetTemplate != nil && overrideTargetLaunchTemplate != nil {
+				targetTemplate = overrideTargetTemplate
+				targetLaunchTemplate = overrideTargetLaunchTemplate
+			}
+		}
 		switch {
 		case instance.LaunchTemplate == nil:
 			fallthrough
