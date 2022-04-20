@@ -14,7 +14,7 @@ const (
 	EnvDebug                 = "DEBUG"
 	EnvIgnoreDaemonSets      = "IGNORE_DAEMON_SETS"
 	EnvDeleteLocalData       = "DELETE_LOCAL_DATA"
-	EnvClusterName           = "CLUSTER_NAME"
+	EnvAutodiscoveryTags     = "AUTODISCOVERY_TAGS"
 	EnvAutoScalingGroupNames = "AUTO_SCALING_GROUP_NAMES"
 	EnvAwsRegion             = "AWS_REGION"
 )
@@ -23,7 +23,7 @@ type config struct {
 	Environment           string   // Optional
 	Debug                 bool     // Defaults to false
 	AutoScalingGroupNames []string // Required if ClusterName not provided
-	ClusterName           string   // Required if AutoScalingGroupNames not provided
+	AutodiscoveryTags     string   // Required if AutoScalingGroupNames not provided
 	AwsRegion             string   // Defaults to us-west-2
 	IgnoreDaemonSets      bool     // Defaults to true
 	DeleteLocalData       bool     // Defaults to true
@@ -35,12 +35,12 @@ func Initialize() error {
 		Environment: strings.ToLower(os.Getenv(EnvEnvironment)),
 		Debug:       strings.ToLower(os.Getenv(EnvDebug)) == "true",
 	}
-	if clusterName := os.Getenv(EnvClusterName); len(clusterName) > 0 {
-		cfg.ClusterName = clusterName
+	if autodiscoveryTags := os.Getenv(EnvAutodiscoveryTags); len(autodiscoveryTags) > 0 {
+		cfg.AutodiscoveryTags = autodiscoveryTags
 	} else if autoScalingGroupNames := os.Getenv(EnvAutoScalingGroupNames); len(autoScalingGroupNames) > 0 {
 		cfg.AutoScalingGroupNames = strings.Split(strings.TrimSpace(autoScalingGroupNames), ",")
 	} else {
-		return fmt.Errorf("environment variables '%s' or '%s' are not set", EnvAutoScalingGroupNames, EnvClusterName)
+		return fmt.Errorf("environment variables '%s' or '%s' are not set", EnvAutoScalingGroupNames, EnvAutodiscoveryTags)
 	}
 	if ignoreDaemonSets := strings.ToLower(os.Getenv(EnvIgnoreDaemonSets)); len(ignoreDaemonSets) == 0 || ignoreDaemonSets == "true" {
 		cfg.IgnoreDaemonSets = true

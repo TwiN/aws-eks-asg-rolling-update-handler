@@ -46,21 +46,29 @@ func filterAutoScalingGroupsByTag(autoScalingGroups []*autoscaling.Group, filter
 	return
 }
 
-// DescribeEnabledAutoScalingGroupsByClusterName Gets cluster AutoScalingGroups that are enabled
-// See: https://docs.aws.amazon.com/eks/latest/userguide/cluster-autoscaler.html
-func DescribeEnabledAutoScalingGroupsByClusterName(svc autoscalingiface.AutoScalingAPI, clusterName string) ([]*autoscaling.Group, error) {
+// DescribeEnabledAutoScalingGroupsByTags Gets AutoScalingGroups that match the given tags
+func DescribeEnabledAutoScalingGroupsByTags(svc autoscalingiface.AutoScalingAPI, autodiscoveryTags string) ([]*autoscaling.Group, error) {
 	input := &autoscaling.DescribeAutoScalingGroupsInput{}
 	var result []*autoscaling.Group
 	err := svc.DescribeAutoScalingGroupsPages(input, func(page *autoscaling.DescribeAutoScalingGroupsOutput, lastPage bool) bool {
 		tagFilter := func(tagDescriptions []*autoscaling.TagDescription) bool {
-			clusterNameTag := false
-			enabledTag := false
-			for _, tagDescription := range tagDescriptions {
-				clusterNameTag = clusterNameTag || (aws.StringValue(tagDescription.Key) == fmt.Sprintf("k8s.io/cluster-autoscaler/%s", clusterName) && aws.StringValue(tagDescription.Value) == "owned")
-				enabledTag = enabledTag || (aws.StringValue(tagDescription.Key) == "k8s.io/cluster-autoscaler/enabled" && strings.ToLower(aws.StringValue(tagDescription.Value)) == "true")
+			var matches []bool
+			for _, tag := range strings.Split(autodiscoveryTags, ",") {
+				kv := strings.Split(tag, "=")
+				match := false
+				for _, tagDescription := range tagDescriptions {
+					if aws.StringValue(tagDescription.Key) == kv[0] && aws.StringValue(tagDescription.Value) == kv[1] {
+						match = true
+						break
+					}
+				}
+				matches = append(matches, match)
 			}
-			return clusterNameTag && enabledTag
-
+			b := true
+			for _, match := range matches {
+				b = b && match
+			}
+			return b
 		}
 		result = append(result, filterAutoScalingGroupsByTag(page.AutoScalingGroups, tagFilter)...)
 		return !lastPage
