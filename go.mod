@@ -9,6 +9,7 @@ require (
 	github.com/googleapis/gnostic v0.5.3 // indirect
 	github.com/imdario/mergo v0.3.11 // indirect
 	golang.org/x/oauth2 v0.0.0-20201208152858-08078c50e5b5 // indirect
+	golang.org/x/sys v0.0.0-20220408201424-a24fb2fb8a0f // indirect
 	google.golang.org/appengine v1.6.7 // indirect
 	k8s.io/api v0.19.14
 	k8s.io/apimachinery v0.19.14
