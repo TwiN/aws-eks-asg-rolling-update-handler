@@ -47,7 +47,22 @@ The steps of each action are persisted directly on the old nodes (i.e. when the 
 | DELETE_LOCAL_DATA        | Whether to delete local data when draining the nodes | no | `true` |
 | AWS_REGION               | Self-explanatory | no | `us-west-2` |
 | ENVIRONMENT              | If set to `dev`, will try to create the Kubernetes client using your local kubeconfig. Any other values will use the in-cluster configuration | no | `""` |
+| METRICS_PORT             | Port to bind metrics server to | no | `8080` |
+| METRICS                  | Expose metrics in Promtheus format at `:${METRICS_PORT}/metrics` | no | `""` | 
 
+## Metrics
+
+All the metrics are prefixed with `rolling_update_handler`.
+
+| Metric name | Metric type | Labels | Description |
+| ----------- | ----------- | ------ | ----------- |
+| node_groups | Gauge | | Node groups managed by the handler |
+| outdated_nodes | Gauge | `node_group` | The number of outdated nodes |
+| updated_nodes | Gauge | `node_group` | The number of updated nodes |
+| scaled_up_nodes | Counter | `node_group` | The total number of nodes scaled up |
+| scaled_down_nodes | Counter | `node_group` | The total number of nodes scaled down |
+| drained_nodes_total | Counter | `node_group` | The total number of drained nodes |
+| errors | Counter |  | The total errors |
 
 ## Permissions
 
