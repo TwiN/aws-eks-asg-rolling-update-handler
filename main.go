@@ -9,6 +9,7 @@ import (
 	"github.com/TwiN/aws-eks-asg-rolling-update-handler/cloud"
 	"github.com/TwiN/aws-eks-asg-rolling-update-handler/config"
 	"github.com/TwiN/aws-eks-asg-rolling-update-handler/k8s"
+	"github.com/TwiN/aws-eks-asg-rolling-update-handler/metrics"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/autoscaling"
 	"github.com/aws/aws-sdk-go/service/autoscaling/autoscalingiface"
@@ -31,6 +32,9 @@ func main() {
 	err := config.Initialize()
 	if err != nil {
 		log.Fatalf("Unable to initialize configuration: %s", err.Error())
+	}
+	if config.Get().Metrics {
+		go metrics.Server.Listen(config.Get().MetricsPort)
 	}
 	ec2Service, autoScalingService, err := cloud.GetServices(config.Get().AwsRegion)
 	if err != nil {
@@ -58,6 +62,7 @@ func run(ec2Service ec2iface.EC2API, autoScalingService autoscalingiface.AutoSca
 	cfg := config.Get()
 	client, err := k8s.CreateClientSet()
 	if err != nil {
+		metrics.Server.Errors.Inc()
 		return errors.New("unable to create Kubernetes client: " + err.Error())
 	}
 	kubernetesClient := k8s.NewKubernetesClient(client)
@@ -66,17 +71,19 @@ func run(ec2Service ec2iface.EC2API, autoScalingService autoscalingiface.AutoSca
 	}
 
 	var autoScalingGroups []*autoscaling.Group
-	if len(cfg.ClusterName) > 0 {
-		autoScalingGroups, err = cloud.DescribeEnabledAutoScalingGroupsByClusterName(autoScalingService, cfg.ClusterName)
+	if len(cfg.AutodiscoveryTags) > 0 {
+		autoScalingGroups, err = cloud.DescribeEnabledAutoScalingGroupsByTags(autoScalingService, cfg.AutodiscoveryTags)
 	} else {
 		autoScalingGroups, err = cloud.DescribeAutoScalingGroupsByNames(autoScalingService, cfg.AutoScalingGroupNames)
 	}
 	if err != nil {
+		metrics.Server.Errors.Inc()
 		return errors.New("unable to describe AutoScalingGroups: " + err.Error())
 	}
 	if cfg.Debug {
 		log.Println("Described AutoScalingGroups successfully")
 	}
+	metrics.Server.NodeGroups.WithLabelValues().Set(float64(len(autoScalingGroups)))
 	return HandleRollingUpgrade(kubernetesClient, ec2Service, autoScalingService, autoScalingGroups)
 }
 
@@ -95,6 +102,7 @@ func HandleRollingUpgrade(kubernetesClient k8s.KubernetesClientApi, ec2Service e
 	}()
 	select {
 	case <-timeout:
+		metrics.Server.Errors.Inc()
 		return ErrTimedOut
 	case <-result:
 		return nil
@@ -107,9 +115,13 @@ func DoHandleRollingUpgrade(kubernetesClient k8s.KubernetesClientApi, ec2Service
 	for _, autoScalingGroup := range autoScalingGroups {
 		outdatedInstances, updatedInstances, err := SeparateOutdatedFromUpdatedInstances(autoScalingGroup, ec2Service)
 		if err != nil {
+			metrics.Server.Errors.Inc()
 			log.Printf("[%s] Skipping because unable to separate outdated instances from updated instances: %v", aws.StringValue(autoScalingGroup.AutoScalingGroupName), err.Error())
 			continue
 		}
+		fmt.Printf("[%s] Found %d outdated instances and %d updated instances\n", aws.StringValue(autoScalingGroup.AutoScalingGroupName), len(outdatedInstances), len(updatedInstances))
+		metrics.Server.UpdatedNodes.WithLabelValues(aws.StringValue(autoScalingGroup.AutoScalingGroupName)).Set(float64(len(updatedInstances)))
+		metrics.Server.OutdatedNodes.WithLabelValues(aws.StringValue(autoScalingGroup.AutoScalingGroupName)).Set(float64(len(outdatedInstances)))
 		if config.Get().Debug {
 			log.Printf("[%s] outdatedInstances: %v", aws.StringValue(autoScalingGroup.AutoScalingGroupName), outdatedInstances)
 			log.Printf("[%s] updatedInstances: %v", aws.StringValue(autoScalingGroup.AutoScalingGroupName), updatedInstances)
@@ -158,9 +170,11 @@ func DoHandleRollingUpgrade(kubernetesClient k8s.KubernetesClientApi, ec2Service
 						log.Printf("[%s][%s] Draining node", aws.StringValue(autoScalingGroup.AutoScalingGroupName), aws.StringValue(outdatedInstance.InstanceId))
 						err := kubernetesClient.Drain(node.Name, config.Get().IgnoreDaemonSets, config.Get().DeleteLocalData)
 						if err != nil {
+							metrics.Server.Errors.Inc()
 							log.Printf("[%s][%s] Skipping because ran into error while draining node: %v", aws.StringValue(autoScalingGroup.AutoScalingGroupName), aws.StringValue(outdatedInstance.InstanceId), err.Error())
 							continue
 						} else {
+							metrics.Server.DrainedNodes.WithLabelValues(aws.StringValue(autoScalingGroup.AutoScalingGroupName)).Inc()
 							// Only annotate if no error was encountered
 							_ = k8s.AnnotateNodeByAwsAutoScalingInstance(kubernetesClient, outdatedInstance, k8s.RollingUpdateDrainedTimestampAnnotationKey, time.Now().Format(time.RFC3339))
 						}
@@ -173,9 +187,11 @@ func DoHandleRollingUpgrade(kubernetesClient k8s.KubernetesClientApi, ec2Service
 						shouldDecrementDesiredCapacity := aws.Int64Value(autoScalingGroup.DesiredCapacity) != aws.Int64Value(autoScalingGroup.MinSize)
 						err = cloud.TerminateEc2Instance(autoScalingService, outdatedInstance, shouldDecrementDesiredCapacity)
 						if err != nil {
+							metrics.Server.Errors.Inc()
 							log.Printf("[%s][%s] Ran into error while terminating node: %v", aws.StringValue(autoScalingGroup.AutoScalingGroupName), aws.StringValue(outdatedInstance.InstanceId), err.Error())
 							continue
 						} else {
+							metrics.Server.ScaledDownNodes.WithLabelValues(aws.StringValue(autoScalingGroup.AutoScalingGroupName)).Inc()
 							// Only annotate if no error was encountered
 							_ = k8s.AnnotateNodeByAwsAutoScalingInstance(kubernetesClient, outdatedInstance, k8s.RollingUpdateTerminatedTimestampAnnotationKey, time.Now().Format(time.RFC3339))
 						}
@@ -203,6 +219,7 @@ func DoHandleRollingUpgrade(kubernetesClient k8s.KubernetesClientApi, ec2Service
 						log.Printf("[%s][%s] Skipping", aws.StringValue(autoScalingGroup.AutoScalingGroupName), aws.StringValue(outdatedInstance.InstanceId))
 						continue
 					} else {
+						metrics.Server.ScaledUpNodes.WithLabelValues(aws.StringValue(autoScalingGroup.AutoScalingGroupName)).Inc()
 						// ASG was scaled up already, stop iterating over outdated instances in current ASG so we can
 						// move on to the next ASG
 						break
@@ -331,7 +348,7 @@ func SeparateOutdatedFromUpdatedInstances(asg *autoscaling.Group, ec2Svc ec2ifac
 		targetLaunchTemplateOverrides = asg.MixedInstancesPolicy.LaunchTemplate.Overrides
 	}
 	if targetLaunchTemplate != nil {
-		return SeparateOutdatedFromUpdatedInstancesUsingLaunchTemplate(targetLaunchTemplate, targetLaunchTemplateOverrides, asg.Instances, ec2Svc)
+		return SeparateOutdatedFromUpdatedInstancesUsingLaunchTemplate(aws.StringValue(asg.AutoScalingGroupName), targetLaunchTemplate, targetLaunchTemplateOverrides, asg.Instances, ec2Svc)
 	} else if targetLaunchConfiguration != nil {
 		return SeparateOutdatedFromUpdatedInstancesUsingLaunchConfiguration(targetLaunchConfiguration, asg.Instances)
 	}
@@ -340,7 +357,7 @@ func SeparateOutdatedFromUpdatedInstances(asg *autoscaling.Group, ec2Svc ec2ifac
 
 // SeparateOutdatedFromUpdatedInstancesUsingLaunchTemplate separates a list of instances into a list of outdated
 // instances and a list of updated instances.
-func SeparateOutdatedFromUpdatedInstancesUsingLaunchTemplate(targetLaunchTemplate *autoscaling.LaunchTemplateSpecification, overrides []*autoscaling.LaunchTemplateOverrides, instances []*autoscaling.Instance, ec2Svc ec2iface.EC2API) ([]*autoscaling.Instance, []*autoscaling.Instance, error) {
+func SeparateOutdatedFromUpdatedInstancesUsingLaunchTemplate(asgName string, targetLaunchTemplate *autoscaling.LaunchTemplateSpecification, overrides []*autoscaling.LaunchTemplateOverrides, instances []*autoscaling.Instance, ec2Svc ec2iface.EC2API) ([]*autoscaling.Instance, []*autoscaling.Instance, error) {
 	var (
 		oldInstances   []*autoscaling.Instance
 		newInstances   []*autoscaling.Instance
@@ -365,6 +382,24 @@ func SeparateOutdatedFromUpdatedInstancesUsingLaunchTemplate(targetLaunchTemplat
 	}
 	// now we can loop through each node and compare
 	for _, instance := range instances {
+		if isInstanceTypePartOfLaunchTemplateOverrides(overrides, instance.InstanceType) {
+			var (
+				overrideTargetTemplate       *ec2.LaunchTemplate
+				overrideTargetLaunchTemplate *autoscaling.LaunchTemplateSpecification
+			)
+			for _, override := range overrides {
+				if aws.StringValue(override.InstanceType) == aws.StringValue(instance.InstanceType) && override.LaunchTemplateSpecification != nil {
+					if overrideTargetTemplate, err = cloud.DescribeLaunchTemplateByName(ec2Svc, aws.StringValue(override.LaunchTemplateSpecification.LaunchTemplateName)); err != nil {
+						log.Printf("[%s][%s] Unable to retrieve launch template information: %v", asgName, aws.StringValue(override.LaunchTemplateSpecification.LaunchTemplateName), err)
+					}
+					overrideTargetLaunchTemplate = override.LaunchTemplateSpecification
+				}
+			}
+			if overrideTargetTemplate != nil && overrideTargetLaunchTemplate != nil {
+				targetTemplate = overrideTargetTemplate
+				targetLaunchTemplate = overrideTargetLaunchTemplate
+			}
+		}
 		switch {
 		case instance.LaunchTemplate == nil:
 			fallthrough

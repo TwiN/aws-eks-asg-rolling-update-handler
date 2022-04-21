@@ -68,7 +68,7 @@ func TestSeparateOutdatedFromUpdatedInstancesUsingLaunchTemplate_whenInstanceIsO
 		LaunchTemplateName:   updatedLaunchTemplate.LaunchTemplateName,
 	}
 	instance := cloudtest.CreateTestAutoScalingInstance("instance", "", outdatedLaunchTemplate, "InService")
-	outdated, updated, err := SeparateOutdatedFromUpdatedInstancesUsingLaunchTemplate(updatedLaunchTemplate, nil, []*autoscaling.Instance{instance}, cloudtest.NewMockEC2Service([]*ec2.LaunchTemplate{updatedEc2LaunchTemplate}))
+	outdated, updated, err := SeparateOutdatedFromUpdatedInstancesUsingLaunchTemplate("test", updatedLaunchTemplate, nil, []*autoscaling.Instance{instance}, cloudtest.NewMockEC2Service([]*ec2.LaunchTemplate{updatedEc2LaunchTemplate}))
 	if err != nil {
 		t.Fatal("Shouldn't have returned an error, but returned:", err)
 	}
@@ -96,7 +96,7 @@ func TestSeparateOutdatedFromUpdatedInstancesUsingLaunchTemplate_whenInstanceIsO
 		{InstanceType: aws.String("c5d.2xlarge")},
 	}
 	// Notice: The instance's instance type isn't part of the overrides.
-	outdated, updated, err := SeparateOutdatedFromUpdatedInstancesUsingLaunchTemplate(launchTemplate, overrides, []*autoscaling.Instance{instance}, cloudtest.NewMockEC2Service([]*ec2.LaunchTemplate{updatedEc2LaunchTemplate}))
+	outdated, updated, err := SeparateOutdatedFromUpdatedInstancesUsingLaunchTemplate("test", launchTemplate, overrides, []*autoscaling.Instance{instance}, cloudtest.NewMockEC2Service([]*ec2.LaunchTemplate{updatedEc2LaunchTemplate}))
 	if err != nil {
 		t.Fatal("Shouldn't have returned an error, but returned:", err)
 	}
@@ -118,7 +118,7 @@ func TestSeparateOutdatedFromUpdatedInstancesUsingLaunchTemplate_whenInstanceIsU
 		LaunchTemplateName:   updatedLaunchTemplate.LaunchTemplateName,
 	}
 	instance := cloudtest.CreateTestAutoScalingInstance("instance", "", updatedLaunchTemplate, "InService")
-	outdated, updated, err := SeparateOutdatedFromUpdatedInstancesUsingLaunchTemplate(updatedLaunchTemplate, nil, []*autoscaling.Instance{instance}, cloudtest.NewMockEC2Service([]*ec2.LaunchTemplate{updatedEc2LaunchTemplate}))
+	outdated, updated, err := SeparateOutdatedFromUpdatedInstancesUsingLaunchTemplate("test", updatedLaunchTemplate, nil, []*autoscaling.Instance{instance}, cloudtest.NewMockEC2Service([]*ec2.LaunchTemplate{updatedEc2LaunchTemplate}))
 	if err != nil {
 		t.Fatal("Shouldn't have returned an error, but returned:", err)
 	}
@@ -145,11 +145,40 @@ func TestSeparateOutdatedFromUpdatedInstancesUsingLaunchTemplate_whenInstanceWit
 		{InstanceType: aws.String("c5.2xlarge")},
 		{InstanceType: aws.String("c5d.2xlarge")},
 	}
-	outdated, updated, err := SeparateOutdatedFromUpdatedInstancesUsingLaunchTemplate(launchTemplate, overrides, []*autoscaling.Instance{instance}, cloudtest.NewMockEC2Service([]*ec2.LaunchTemplate{updatedEc2LaunchTemplate}))
+	outdated, updated, err := SeparateOutdatedFromUpdatedInstancesUsingLaunchTemplate("test", launchTemplate, overrides, []*autoscaling.Instance{instance}, cloudtest.NewMockEC2Service([]*ec2.LaunchTemplate{updatedEc2LaunchTemplate}))
 	if err != nil {
 		t.Fatal("Shouldn't have returned an error, but returned:", err)
 	}
 	if len(outdated) != 0 || len(updated) != 1 {
+		t.Error("Instance should've been updated")
+	}
+}
+
+func TestSeparateOutdatedFromUpdatedInstancesUsingLaunchTemplate_whenInstanceWithMixedInstancesPolicyAndOverrideIsUpdated(t *testing.T) {
+	launchTemplate := &autoscaling.LaunchTemplateSpecification{
+		LaunchTemplateId:   aws.String("id"),
+		LaunchTemplateName: aws.String("name"),
+		Version:            aws.String("v1"),
+	}
+	updatedEc2LaunchTemplate := &ec2.LaunchTemplate{
+		DefaultVersionNumber: aws.Int64(1),
+		LatestVersionNumber:  aws.Int64(10),
+		LaunchTemplateId:     launchTemplate.LaunchTemplateId,
+		LaunchTemplateName:   launchTemplate.LaunchTemplateName,
+	}
+	instance := cloudtest.CreateTestAutoScalingInstance("instance", "", launchTemplate, "InService")
+	instance.SetInstanceType("c5d.2xlarge")
+	instanceWithLaunchTemplateOverride := cloudtest.CreateTestAutoScalingInstance("instance", "", launchTemplate, "InService")
+	instanceWithLaunchTemplateOverride.SetInstanceType("c5d.2xlarge")
+	overrides := []*autoscaling.LaunchTemplateOverrides{
+		{InstanceType: aws.String("c5.2xlarge"), LaunchTemplateSpecification: launchTemplate},
+		{InstanceType: aws.String("c5d.2xlarge")},
+	}
+	outdated, updated, err := SeparateOutdatedFromUpdatedInstancesUsingLaunchTemplate("test", launchTemplate, overrides, []*autoscaling.Instance{instance, instanceWithLaunchTemplateOverride}, cloudtest.NewMockEC2Service([]*ec2.LaunchTemplate{updatedEc2LaunchTemplate}))
+	if err != nil {
+		t.Fatal("Shouldn't have returned an error, but returned:", err)
+	}
+	if len(outdated) != 0 || len(updated) != 2 {
 		t.Error("Instance should've been updated")
 	}
 }

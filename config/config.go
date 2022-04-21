@@ -16,9 +16,11 @@ const (
 	EnvDebug                 = "DEBUG"
 	EnvIgnoreDaemonSets      = "IGNORE_DAEMON_SETS"
 	EnvDeleteLocalData       = "DELETE_LOCAL_DATA"
-	EnvClusterName           = "CLUSTER_NAME"
+	EnvAutodiscoveryTags     = "AUTODISCOVERY_TAGS"
 	EnvAutoScalingGroupNames = "AUTO_SCALING_GROUP_NAMES"
 	EnvAwsRegion             = "AWS_REGION"
+	EnvMetrics               = "METRICS"
+	EnvMetricsPort           = "METRICS_PORT"
 	EnvExecutionInterval     = "EXECUTION_INTERVAL"
 	EnvExecutionTimeout      = "EXECUTION_TIMEOUT"
 )
@@ -31,6 +33,8 @@ type config struct {
 	AwsRegion             string        // Defaults to us-west-2
 	IgnoreDaemonSets      bool          // Defaults to true
 	DeleteLocalData       bool          // Defaults to true
+	Metrics               bool     // Defaults to false
+	MetricsPort           int      // Defaults to 8080
 	ExecutionInterval     time.Duration // Defaults to 20s
 	ExecutionTimeout      time.Duration // Defaults to 900s
 }
@@ -41,12 +45,12 @@ func Initialize() error {
 		Environment: strings.ToLower(os.Getenv(EnvEnvironment)),
 		Debug:       strings.ToLower(os.Getenv(EnvDebug)) == "true",
 	}
-	if clusterName := os.Getenv(EnvClusterName); len(clusterName) > 0 {
-		cfg.ClusterName = clusterName
+	if autodiscoveryTags := os.Getenv(EnvAutodiscoveryTags); len(autodiscoveryTags) > 0 {
+		cfg.AutodiscoveryTags = autodiscoveryTags
 	} else if autoScalingGroupNames := os.Getenv(EnvAutoScalingGroupNames); len(autoScalingGroupNames) > 0 {
 		cfg.AutoScalingGroupNames = strings.Split(strings.TrimSpace(autoScalingGroupNames), ",")
 	} else {
-		return fmt.Errorf("environment variables '%s' or '%s' are not set", EnvAutoScalingGroupNames, EnvClusterName)
+		return fmt.Errorf("environment variables '%s' or '%s' are not set", EnvAutoScalingGroupNames, EnvAutodiscoveryTags)
 	}
 	if ignoreDaemonSets := strings.ToLower(os.Getenv(EnvIgnoreDaemonSets)); len(ignoreDaemonSets) == 0 || ignoreDaemonSets == "true" {
 		cfg.IgnoreDaemonSets = true
@@ -79,6 +83,20 @@ func Initialize() error {
 	} else {
 		log.Printf("Environment variable '%s' not specified, defaulting to 900 seconds", EnvExecutionTimeout)
 		cfg.ExecutionTimeout = time.Second * 900
+	}
+	if metricsPort := os.Getenv(EnvMetricsPort); len(metricsPort) == 0 {
+		log.Printf("Environment variable '%s' not specified, defaulting to 8080", EnvMetricsPort)
+		cfg.MetricsPort = 8080
+	} else {
+		port, err := strconv.Atoi(metricsPort)
+		if err != nil {
+			return fmt.Errorf("invalid value for '%s': %s", EnvMetricsPort, err)
+		}
+		cfg.MetricsPort = port
+	}
+
+	if metrics := strings.ToLower(os.Getenv(EnvMetrics)); len(metrics) != 0 {
+		cfg.Metrics = true
 	}
 	return nil
 }
