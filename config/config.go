@@ -114,7 +114,10 @@ func Set(autoScalingGroupNames []string, ignoreDaemonSets, deleteLocalData bool)
 func Get() *config {
 	if cfg == nil {
 		log.Println("Config wasn't initialized prior to being called. Assuming this is a test.")
-		cfg = &config{}
+		cfg = &config{
+			ExecutionInterval: time.Second * 20,
+			ExecutionTimeout:  time.Second * 900,
+		}
 	}
 	return cfg
 }
