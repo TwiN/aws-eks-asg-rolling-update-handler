@@ -18,9 +18,7 @@ import (
 )
 
 const (
-	MaximumFailedExecutionBeforePanic = 10               // Maximum number of allowed failed executions before panicking
-	ExecutionInterval                 = 20 * time.Second // Duration to sleep between each execution
-	ExecutionTimeout                  = 15 * time.Minute // Maximum execution duration before timing out
+	MaximumFailedExecutionBeforePanic = 10 // Maximum number of allowed failed executions before panicking
 )
 
 var (
@@ -50,8 +48,8 @@ func main() {
 			log.Printf("Execution was successful after %d failed attempts, resetting counter to 0", executionFailedCounter)
 			executionFailedCounter = 0
 		}
-		log.Printf("Execution took %dms, sleeping for %s", time.Since(start).Milliseconds(), ExecutionInterval)
-		time.Sleep(ExecutionInterval)
+		log.Printf("Execution took %dms, sleeping for %d seconds", time.Since(start).Milliseconds(), config.Get().ExecutionInterval)
+		time.Sleep(config.Get().ExecutionInterval)
 	}
 }
 
@@ -89,7 +87,7 @@ func HandleRollingUpgrade(kubernetesClient k8s.KubernetesClientApi, ec2Service e
 	timeout := make(chan bool, 1)
 	result := make(chan bool, 1)
 	go func() {
-		time.Sleep(ExecutionTimeout)
+		time.Sleep(config.Get().ExecutionTimeout)
 		timeout <- true
 	}()
 	go func() {

@@ -4,7 +4,9 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strconv"
 	"strings"
+	"time"
 )
 
 var cfg *config
@@ -17,16 +19,20 @@ const (
 	EnvClusterName           = "CLUSTER_NAME"
 	EnvAutoScalingGroupNames = "AUTO_SCALING_GROUP_NAMES"
 	EnvAwsRegion             = "AWS_REGION"
+	EnvExecutionInterval     = "EXECUTION_INTERVAL"
+	EnvExecutionTimeout      = "EXECUTION_TIMEOUT"
 )
 
 type config struct {
-	Environment           string   // Optional
-	Debug                 bool     // Defaults to false
-	AutoScalingGroupNames []string // Required if ClusterName not provided
-	ClusterName           string   // Required if AutoScalingGroupNames not provided
-	AwsRegion             string   // Defaults to us-west-2
-	IgnoreDaemonSets      bool     // Defaults to true
-	DeleteLocalData       bool     // Defaults to true
+	Environment           string        // Optional
+	Debug                 bool          // Defaults to false
+	AutoScalingGroupNames []string      // Required if ClusterName not provided
+	ClusterName           string        // Required if AutoScalingGroupNames not provided
+	AwsRegion             string        // Defaults to us-west-2
+	IgnoreDaemonSets      bool          // Defaults to true
+	DeleteLocalData       bool          // Defaults to true
+	ExecutionInterval     time.Duration // Defaults to 20s
+	ExecutionTimeout      time.Duration // Defaults to 900s
 }
 
 // Initialize is used to initialize the application's configuration
@@ -53,6 +59,26 @@ func Initialize() error {
 		cfg.AwsRegion = "us-west-2"
 	} else {
 		cfg.AwsRegion = awsRegion
+	}
+	if executionInterval := os.Getenv(EnvExecutionInterval); len(executionInterval) > 0 {
+		if interval, err := strconv.Atoi(executionInterval); err != nil {
+			return fmt.Errorf("environment variable '%s' must be an integer", EnvExecutionInterval)
+		} else {
+			cfg.ExecutionInterval = time.Second * time.Duration(interval)
+		}
+	} else {
+		log.Printf("Environment variable '%s' not specified, defaulting to 20 seconds", EnvExecutionInterval)
+		cfg.ExecutionInterval = time.Second * 20
+	}
+	if executionTImeout := os.Getenv(EnvExecutionTimeout); len(executionTImeout) > 0 {
+		if timeout, err := strconv.Atoi(executionTImeout); err != nil {
+			return fmt.Errorf("environment variable '%s' must be an integer", EnvExecutionTimeout)
+		} else {
+			cfg.ExecutionTimeout = time.Second * time.Duration(timeout)
+		}
+	} else {
+		log.Printf("Environment variable '%s' not specified, defaulting to 900 seconds", EnvExecutionTimeout)
+		cfg.ExecutionTimeout = time.Second * 900
 	}
 	return nil
 }
