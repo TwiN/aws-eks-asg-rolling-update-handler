@@ -29,12 +29,12 @@ type config struct {
 	Environment           string        // Optional
 	Debug                 bool          // Defaults to false
 	AutoScalingGroupNames []string      // Required if ClusterName not provided
-	ClusterName           string        // Required if AutoScalingGroupNames not provided
+	AutodiscoveryTags     string        // Required if AutoScalingGroupNames not provided
 	AwsRegion             string        // Defaults to us-west-2
 	IgnoreDaemonSets      bool          // Defaults to true
 	DeleteLocalData       bool          // Defaults to true
-	Metrics               bool     // Defaults to false
-	MetricsPort           int      // Defaults to 8080
+	Metrics               bool          // Defaults to false
+	MetricsPort           int           // Defaults to 8080
 	ExecutionInterval     time.Duration // Defaults to 20s
 	ExecutionTimeout      time.Duration // Defaults to 900s
 }
