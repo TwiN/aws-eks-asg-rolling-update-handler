@@ -43,7 +43,7 @@ Therefore, this application will not run into any issues if it is restarted, res
 | Environment variable     | Description | Required | Default |
 |:------------------------ |:----------- |:-------- |:------- |
 | CLUSTER_NAME             | Name of the eks-cluster, used in place of `AUTODISCOVERRY_TAGS` and `AUTO_SCALING_GROUP_NAMES`. Checks for `k8s.io/cluster-autoscaler/<CLUSTER_NAME>: owned` and `k8s.io/cluster-autoscaler/enabled: true` tags on ASG | yes | `""` |
-| AUTODISCOVERY_TAGS       | Comma separated key value string with tags to autodiscover ASGs, used in place of AUTO_SCALING_GROUP_NAMES. | yes | `""` |
+| AUTODISCOVERY_TAGS       | Comma separated key value string with tags to autodiscover ASGs, used in place of `CLUSTER_NAME` and `AUTO_SCALING_GROUP_NAMES`. | yes | `""` |
 | AUTO_SCALING_GROUP_NAMES | Comma-separated list of ASGs, CLUSTER_NAME takes priority. | yes | `""` |
 | IGNORE_DAEMON_SETS       | Whether to ignore DaemonSets when draining the nodes | no | `true` |
 | DELETE_LOCAL_DATA        | Whether to delete local data when draining the nodes | no | `true` |
