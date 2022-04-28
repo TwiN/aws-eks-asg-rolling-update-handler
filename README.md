@@ -49,6 +49,8 @@ Therefore, this application will not run into any issues if it is restarted, res
 | DELETE_LOCAL_DATA        | Whether to delete local data when draining the nodes | no | `true` |
 | AWS_REGION               | Self-explanatory | no | `us-west-2` |
 | ENVIRONMENT              | If set to `dev`, will try to create the Kubernetes client using your local kubeconfig. Any other values will use the in-cluster configuration | no | `""` |
+| EXECUTION_INTERVAL | Duration to sleep between each execution in seconds | no | `20` |
+| EXECUTION_TIMEOUT | Maximum execution duration before timing out in seconds | no | `900` |
 
 
 ## Permissions
