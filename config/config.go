@@ -25,15 +25,15 @@ const (
 )
 
 type config struct {
-	Environment           string   		// Optional
-	Debug                 bool    		// Defaults to false
-	AutoScalingGroupNames []string 		// Required if AutodiscoveryTags not provided
-	AutodiscoveryTags     string   		// Required if AutoScalingGroupNames not provided
-	AwsRegion             string   		// Defaults to us-west-2
-	IgnoreDaemonSets      bool     		// Defaults to true
-	DeleteLocalData       bool     		// Defaults to true
+	Environment           string        // Optional
+	Debug                 bool          // Defaults to false
+	AutoScalingGroupNames []string      // Required if AutodiscoveryTags not provided
+	AutodiscoveryTags     string        // Required if AutoScalingGroupNames not provided
+	AwsRegion             string        // Defaults to us-west-2
+	IgnoreDaemonSets      bool          // Defaults to true
+	DeleteLocalData       bool          // Defaults to true
 	ExecutionInterval     time.Duration // Defaults to 20s
-	ExecutionTimeout      time.Duration // Defaults to 900s	
+	ExecutionTimeout      time.Duration // Defaults to 900s
 }
 
 // Initialize is used to initialize the application's configuration
