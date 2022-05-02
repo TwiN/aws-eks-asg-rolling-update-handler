@@ -90,6 +90,16 @@ func (m *MockAutoScalingService) DescribeAutoScalingGroups(input *autoscaling.De
 	}, nil
 }
 
+func (m *MockAutoScalingService) DescribeAutoScalingGroupsPages(input *autoscaling.DescribeAutoScalingGroupsInput, f func(*autoscaling.DescribeAutoScalingGroupsOutput, bool) bool) error {
+	idx := 0
+	for _, asg := range m.AutoScalingGroups {
+		x := &autoscaling.DescribeAutoScalingGroupsOutput{AutoScalingGroups: []*autoscaling.Group{asg}}
+		idx++
+		f(x, idx == len(m.AutoScalingGroups))
+	}
+	return nil
+}
+
 func (m *MockAutoScalingService) SetDesiredCapacity(input *autoscaling.SetDesiredCapacityInput) (*autoscaling.SetDesiredCapacityOutput, error) {
 	m.Counter["SetDesiredCapacity"]++
 	m.AutoScalingGroups[aws.StringValue(input.AutoScalingGroupName)].SetDesiredCapacity(aws.Int64Value(input.DesiredCapacity))

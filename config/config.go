@@ -17,6 +17,7 @@ const (
 	EnvIgnoreDaemonSets      = "IGNORE_DAEMON_SETS"
 	EnvDeleteLocalData       = "DELETE_LOCAL_DATA"
 	EnvClusterName           = "CLUSTER_NAME"
+	EnvAutodiscoveryTags     = "AUTODISCOVERY_TAGS"
 	EnvAutoScalingGroupNames = "AUTO_SCALING_GROUP_NAMES"
 	EnvAwsRegion             = "AWS_REGION"
 	EnvExecutionInterval     = "EXECUTION_INTERVAL"
@@ -26,8 +27,8 @@ const (
 type config struct {
 	Environment           string        // Optional
 	Debug                 bool          // Defaults to false
-	AutoScalingGroupNames []string      // Required if ClusterName not provided
-	ClusterName           string        // Required if AutoScalingGroupNames not provided
+	AutoScalingGroupNames []string      // Required if AutodiscoveryTags not provided
+	AutodiscoveryTags     string        // Required if AutoScalingGroupNames not provided
 	AwsRegion             string        // Defaults to us-west-2
 	IgnoreDaemonSets      bool          // Defaults to true
 	DeleteLocalData       bool          // Defaults to true
@@ -42,11 +43,13 @@ func Initialize() error {
 		Debug:       strings.ToLower(os.Getenv(EnvDebug)) == "true",
 	}
 	if clusterName := os.Getenv(EnvClusterName); len(clusterName) > 0 {
-		cfg.ClusterName = clusterName
+		cfg.AutodiscoveryTags = fmt.Sprintf("k8s.io/cluster-autoscaler/%s=owned,k8s.io/cluster-autoscaler/enabled=true", clusterName)
+	} else if autodiscoveryTags := os.Getenv(EnvAutodiscoveryTags); len(autodiscoveryTags) > 0 {
+		cfg.AutodiscoveryTags = autodiscoveryTags
 	} else if autoScalingGroupNames := os.Getenv(EnvAutoScalingGroupNames); len(autoScalingGroupNames) > 0 {
 		cfg.AutoScalingGroupNames = strings.Split(strings.TrimSpace(autoScalingGroupNames), ",")
 	} else {
-		return fmt.Errorf("environment variables '%s' or '%s' are not set", EnvAutoScalingGroupNames, EnvClusterName)
+		return fmt.Errorf("environment variables '%s', '%s' or '%s' are not set", EnvAutoScalingGroupNames, EnvClusterName, EnvAutodiscoveryTags)
 	}
 	if ignoreDaemonSets := strings.ToLower(os.Getenv(EnvIgnoreDaemonSets)); len(ignoreDaemonSets) == 0 || ignoreDaemonSets == "true" {
 		cfg.IgnoreDaemonSets = true
