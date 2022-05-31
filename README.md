@@ -66,7 +66,7 @@ All the metrics are prefixed with `rolling_update_handler`.
 | scaled_up_nodes | Counter | `node_group` | The total number of nodes scaled up |
 | scaled_down_nodes | Counter | `node_group` | The total number of nodes scaled down |
 | drained_nodes_total | Counter | `node_group` | The total number of drained nodes |
-| errors | Counter |  | The total errors |
+| errors | Counter |  | The total number of errors |
 
 ## Permissions
 

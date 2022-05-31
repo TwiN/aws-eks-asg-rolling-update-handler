@@ -29,7 +29,7 @@ const (
 type config struct {
 	Environment           string        // Optional
 	Debug                 bool          // Defaults to false
-	AutoScalingGroupNames []string      // Required if ClusterName not provided
+	AutoScalingGroupNames []string      // Required if AutodiscoveryTags not provided
 	AutodiscoveryTags     string        // Required if AutoScalingGroupNames not provided
 	AwsRegion             string        // Defaults to us-west-2
 	IgnoreDaemonSets      bool          // Defaults to true
