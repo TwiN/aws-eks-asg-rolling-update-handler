@@ -2,6 +2,7 @@ package config
 
 import (
 	"os"
+	"reflect"
 	"testing"
 )
 
@@ -55,6 +56,46 @@ func TestSet(t *testing.T) {
 		t.Error()
 	}
 	if !config.DeleteLocalData {
+		t.Error()
+	}
+}
+
+func TestInitialize_withClusterName(t *testing.T) {
+	_ = os.Setenv(EnvClusterName, "foo")
+	_ = os.Setenv(EnvAutodiscoveryTags, "foo=bar")
+	_ = os.Setenv(EnvAutoScalingGroupNames, "foo,bar")
+	defer os.Clearenv()
+	_ = Initialize()
+	config := Get()
+	if config.AutodiscoveryTags != "k8s.io/cluster-autoscaler/foo=owned,k8s.io/cluster-autoscaler/enabled=true" {
+		t.Error()
+	} else if len(config.AutoScalingGroupNames) != 0 {
+		t.Error()
+	}
+}
+
+func TestInitialize_withAutodiscoveryTags(t *testing.T) {
+	_ = os.Unsetenv(EnvClusterName)
+	_ = os.Setenv(EnvAutodiscoveryTags, "foo=bar,foobar=true")
+	_ = os.Setenv(EnvAutoScalingGroupNames, "foo,bar")
+	defer os.Clearenv()
+	_ = Initialize()
+	config := Get()
+	if config.AutodiscoveryTags != "foo=bar,foobar=true" {
+		t.Error()
+	} else if len(config.AutoScalingGroupNames) != 0 {
+		t.Error()
+	}
+}
+
+func TestInitialize_withAutoScalingGroupNames(t *testing.T) {
+	_ = os.Unsetenv(EnvClusterName)
+	_ = os.Unsetenv(EnvAutodiscoveryTags)
+	_ = os.Setenv(EnvAutoScalingGroupNames, "foo,bar")
+	defer os.Clearenv()
+	_ = Initialize()
+	config := Get()
+	if !reflect.DeepEqual(config.AutoScalingGroupNames, []string{"foo", "bar"}) {
 		t.Error()
 	}
 }
