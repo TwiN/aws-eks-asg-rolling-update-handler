@@ -56,17 +56,15 @@ Therefore, this application will not run into any issues if it is restarted, res
 
 ## Metrics
 
-All the metrics are prefixed with `rolling_update_handler`.
-
 | Metric name | Metric type | Labels | Description |
 | ----------- | ----------- | ------ | ----------- |
-| node_groups | Gauge | | Node groups managed by the handler |
-| outdated_nodes | Gauge | `node_group` | The number of outdated nodes |
-| updated_nodes | Gauge | `node_group` | The number of updated nodes |
-| scaled_up_nodes | Counter | `node_group` | The total number of nodes scaled up |
-| scaled_down_nodes | Counter | `node_group` | The total number of nodes scaled down |
-| drained_nodes_total | Counter | `node_group` | The total number of drained nodes |
-| errors | Counter |  | The total number of errors |
+| rolling_update_handler_node_groups | Gauge | | Node groups managed by the handler |
+| rolling_update_handler_outdated_nodes | Gauge | `node_group` | The number of outdated nodes |
+| rolling_update_handler_updated_nodes | Gauge | `node_group` | The number of updated nodes |
+| rolling_update_handler_scaled_up_nodes | Counter | `node_group` | The total number of nodes scaled up |
+| rolling_update_handler_scaled_down_nodes | Counter | `node_group` | The total number of nodes scaled down |
+| rolling_update_handler_drained_nodes_total | Counter | `node_group` | The total number of drained nodes |
+| rolling_update_handler_errors | Counter |  | The total number of errors |
 
 ## Permissions
 
