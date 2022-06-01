@@ -44,6 +44,7 @@ func main() {
 		start := time.Now()
 		if err := run(ec2Service, autoScalingService); err != nil {
 			log.Printf("Error during execution: %s", err.Error())
+			metrics.Server.Errors.Inc()
 			executionFailedCounter++
 			if executionFailedCounter > MaximumFailedExecutionBeforePanic {
 				panic(fmt.Errorf("execution failed %d times: %v", executionFailedCounter, err))
@@ -62,7 +63,6 @@ func run(ec2Service ec2iface.EC2API, autoScalingService autoscalingiface.AutoSca
 	cfg := config.Get()
 	client, err := k8s.CreateClientSet()
 	if err != nil {
-		metrics.Server.Errors.Inc()
 		return errors.New("unable to create Kubernetes client: " + err.Error())
 	}
 	kubernetesClient := k8s.NewKubernetesClient(client)
@@ -77,13 +77,11 @@ func run(ec2Service ec2iface.EC2API, autoScalingService autoscalingiface.AutoSca
 		autoScalingGroups, err = cloud.DescribeAutoScalingGroupsByNames(autoScalingService, cfg.AutoScalingGroupNames)
 	}
 	if err != nil {
-		metrics.Server.Errors.Inc()
 		return errors.New("unable to describe AutoScalingGroups: " + err.Error())
 	}
 	if cfg.Debug {
 		log.Println("Described AutoScalingGroups successfully")
 	}
-	metrics.Server.NodeGroups.WithLabelValues().Set(float64(len(autoScalingGroups)))
 	return HandleRollingUpgrade(kubernetesClient, ec2Service, autoScalingService, autoScalingGroups)
 }
 
@@ -91,6 +89,7 @@ func run(ec2Service ec2iface.EC2API, autoScalingService autoscalingiface.AutoSca
 //
 // Returns an error if an execution lasts for longer than ExecutionTimeout
 func HandleRollingUpgrade(kubernetesClient k8s.KubernetesClientApi, ec2Service ec2iface.EC2API, autoScalingService autoscalingiface.AutoScalingAPI, autoScalingGroups []*autoscaling.Group) error {
+	metrics.Server.NodeGroups.WithLabelValues().Set(float64(len(autoScalingGroups)))
 	timeout := make(chan bool, 1)
 	result := make(chan bool, 1)
 	go func() {
@@ -102,7 +101,6 @@ func HandleRollingUpgrade(kubernetesClient k8s.KubernetesClientApi, ec2Service e
 	}()
 	select {
 	case <-timeout:
-		metrics.Server.Errors.Inc()
 		return ErrTimedOut
 	case <-result:
 		return nil
