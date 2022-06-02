@@ -51,7 +51,20 @@ Therefore, this application will not run into any issues if it is restarted, res
 | ENVIRONMENT              | If set to `dev`, will try to create the Kubernetes client using your local kubeconfig. Any other values will use the in-cluster configuration | no | `""` |
 | EXECUTION_INTERVAL | Duration to sleep between each execution in seconds | no | `20` |
 | EXECUTION_TIMEOUT | Maximum execution duration before timing out in seconds | no | `900` |
+| METRICS_PORT             | Port to bind metrics server to | no | `8080` |
+| METRICS                  | Expose metrics in Promtheus format at `:${METRICS_PORT}/metrics` | no | `""` | 
 
+## Metrics
+
+| Metric name | Metric type | Labels | Description |
+| ----------- | ----------- | ------ | ----------- |
+| rolling_update_handler_node_groups | Gauge | | Node groups managed by the handler |
+| rolling_update_handler_outdated_nodes | Gauge | `node_group` | The number of outdated nodes |
+| rolling_update_handler_updated_nodes | Gauge | `node_group` | The number of updated nodes |
+| rolling_update_handler_scaled_up_nodes | Counter | `node_group` | The total number of nodes scaled up |
+| rolling_update_handler_scaled_down_nodes | Counter | `node_group` | The total number of nodes scaled down |
+| rolling_update_handler_drained_nodes_total | Counter | `node_group` | The total number of drained nodes |
+| rolling_update_handler_errors | Counter |  | The total number of errors |
 
 ## Permissions
 

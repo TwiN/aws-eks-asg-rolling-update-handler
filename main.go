@@ -9,6 +9,7 @@ import (
 	"github.com/TwiN/aws-eks-asg-rolling-update-handler/cloud"
 	"github.com/TwiN/aws-eks-asg-rolling-update-handler/config"
 	"github.com/TwiN/aws-eks-asg-rolling-update-handler/k8s"
+	"github.com/TwiN/aws-eks-asg-rolling-update-handler/metrics"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/autoscaling"
 	"github.com/aws/aws-sdk-go/service/autoscaling/autoscalingiface"
@@ -32,6 +33,9 @@ func main() {
 	if err != nil {
 		log.Fatalf("Unable to initialize configuration: %s", err.Error())
 	}
+	if config.Get().Metrics {
+		go metrics.Server.Listen(config.Get().MetricsPort)
+	}
 	ec2Service, autoScalingService, err := cloud.GetServices(config.Get().AwsRegion)
 	if err != nil {
 		log.Fatalf("Unable to create AWS services: %s", err.Error())
@@ -40,6 +44,7 @@ func main() {
 		start := time.Now()
 		if err := run(ec2Service, autoScalingService); err != nil {
 			log.Printf("Error during execution: %s", err.Error())
+			metrics.Server.Errors.Inc()
 			executionFailedCounter++
 			if executionFailedCounter > MaximumFailedExecutionBeforePanic {
 				panic(fmt.Errorf("execution failed %d times: %v", executionFailedCounter, err))
@@ -84,6 +89,7 @@ func run(ec2Service ec2iface.EC2API, autoScalingService autoscalingiface.AutoSca
 //
 // Returns an error if an execution lasts for longer than ExecutionTimeout
 func HandleRollingUpgrade(kubernetesClient k8s.KubernetesClientApi, ec2Service ec2iface.EC2API, autoScalingService autoscalingiface.AutoScalingAPI, autoScalingGroups []*autoscaling.Group) error {
+	metrics.Server.NodeGroups.WithLabelValues().Set(float64(len(autoScalingGroups)))
 	timeout := make(chan bool, 1)
 	result := make(chan bool, 1)
 	go func() {
@@ -107,9 +113,13 @@ func DoHandleRollingUpgrade(kubernetesClient k8s.KubernetesClientApi, ec2Service
 	for _, autoScalingGroup := range autoScalingGroups {
 		outdatedInstances, updatedInstances, err := SeparateOutdatedFromUpdatedInstances(autoScalingGroup, ec2Service)
 		if err != nil {
+			metrics.Server.Errors.Inc()
 			log.Printf("[%s] Skipping because unable to separate outdated instances from updated instances: %v", aws.StringValue(autoScalingGroup.AutoScalingGroupName), err.Error())
 			continue
 		}
+		fmt.Printf("[%s] Found %d outdated instances and %d updated instances\n", aws.StringValue(autoScalingGroup.AutoScalingGroupName), len(outdatedInstances), len(updatedInstances))
+		metrics.Server.UpdatedNodes.WithLabelValues(aws.StringValue(autoScalingGroup.AutoScalingGroupName)).Set(float64(len(updatedInstances)))
+		metrics.Server.OutdatedNodes.WithLabelValues(aws.StringValue(autoScalingGroup.AutoScalingGroupName)).Set(float64(len(outdatedInstances)))
 		if config.Get().Debug {
 			log.Printf("[%s] outdatedInstances: %v", aws.StringValue(autoScalingGroup.AutoScalingGroupName), outdatedInstances)
 			log.Printf("[%s] updatedInstances: %v", aws.StringValue(autoScalingGroup.AutoScalingGroupName), updatedInstances)
@@ -158,9 +168,11 @@ func DoHandleRollingUpgrade(kubernetesClient k8s.KubernetesClientApi, ec2Service
 						log.Printf("[%s][%s] Draining node", aws.StringValue(autoScalingGroup.AutoScalingGroupName), aws.StringValue(outdatedInstance.InstanceId))
 						err := kubernetesClient.Drain(node.Name, config.Get().IgnoreDaemonSets, config.Get().DeleteLocalData)
 						if err != nil {
+							metrics.Server.Errors.Inc()
 							log.Printf("[%s][%s] Skipping because ran into error while draining node: %v", aws.StringValue(autoScalingGroup.AutoScalingGroupName), aws.StringValue(outdatedInstance.InstanceId), err.Error())
 							continue
 						} else {
+							metrics.Server.DrainedNodes.WithLabelValues(aws.StringValue(autoScalingGroup.AutoScalingGroupName)).Inc()
 							// Only annotate if no error was encountered
 							_ = k8s.AnnotateNodeByAwsAutoScalingInstance(kubernetesClient, outdatedInstance, k8s.RollingUpdateDrainedTimestampAnnotationKey, time.Now().Format(time.RFC3339))
 						}
@@ -173,9 +185,11 @@ func DoHandleRollingUpgrade(kubernetesClient k8s.KubernetesClientApi, ec2Service
 						shouldDecrementDesiredCapacity := aws.Int64Value(autoScalingGroup.DesiredCapacity) != aws.Int64Value(autoScalingGroup.MinSize)
 						err = cloud.TerminateEc2Instance(autoScalingService, outdatedInstance, shouldDecrementDesiredCapacity)
 						if err != nil {
+							metrics.Server.Errors.Inc()
 							log.Printf("[%s][%s] Ran into error while terminating node: %v", aws.StringValue(autoScalingGroup.AutoScalingGroupName), aws.StringValue(outdatedInstance.InstanceId), err.Error())
 							continue
 						} else {
+							metrics.Server.ScaledDownNodes.WithLabelValues(aws.StringValue(autoScalingGroup.AutoScalingGroupName)).Inc()
 							// Only annotate if no error was encountered
 							_ = k8s.AnnotateNodeByAwsAutoScalingInstance(kubernetesClient, outdatedInstance, k8s.RollingUpdateTerminatedTimestampAnnotationKey, time.Now().Format(time.RFC3339))
 						}
@@ -203,6 +217,7 @@ func DoHandleRollingUpgrade(kubernetesClient k8s.KubernetesClientApi, ec2Service
 						log.Printf("[%s][%s] Skipping", aws.StringValue(autoScalingGroup.AutoScalingGroupName), aws.StringValue(outdatedInstance.InstanceId))
 						continue
 					} else {
+						metrics.Server.ScaledUpNodes.WithLabelValues(aws.StringValue(autoScalingGroup.AutoScalingGroupName)).Inc()
 						// ASG was scaled up already, stop iterating over outdated instances in current ASG so we can
 						// move on to the next ASG
 						break
