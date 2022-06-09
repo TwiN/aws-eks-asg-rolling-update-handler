@@ -17,6 +17,8 @@ var (
 	ErrCannotIncreaseDesiredCountAboveMax = errors.New("cannot increase ASG desired size above max ASG size")
 )
 
+// GetServices returns an instance of a EC2 client with a session as well as
+// an instance of an Autoscaling client with a session
 func GetServices(awsRegion string) (ec2iface.EC2API, autoscalingiface.AutoScalingAPI, error) {
 	awsSession, err := session.NewSession(&aws.Config{Region: aws.String(awsRegion)})
 	if err != nil {
