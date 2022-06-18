@@ -10,17 +10,14 @@ on:
       - '*.md'
 jobs:
   build:
-    name: Build
+    name: build
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Set up Go 1.16
-        uses: actions/setup-go@v1
+      - uses: actions/setup-go@v3
         with:
-          go-version: 1.16
-        id: go
-      - name: Check out code into the Go module directory
-        uses: actions/checkout@v2
+          go-version: 1.18
+      - uses: actions/checkout@v2
       - name: Build binary to make sure it works
         run: go build -mod vendor
       - name: Test
