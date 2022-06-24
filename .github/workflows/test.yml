@@ -1,4 +1,4 @@
-name: build
+name: test
 on:
   pull_request:
     paths-ignore:
@@ -9,8 +9,8 @@ on:
     paths-ignore:
       - '*.md'
 jobs:
-  build:
-    name: build
+  test:
+    name: test
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -18,7 +18,5 @@ jobs:
         with:
           go-version: 1.18
       - uses: actions/checkout@v3
-      - name: Build binary to make sure it works
-        run: go build -mod vendor
-      - name: Test
-        run: go test -mod vendor ./... -cover
+      - run: go build -mod vendor
+      - run: go test -mod vendor ./... -cover
