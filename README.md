@@ -88,14 +88,14 @@ metadata:
   name: aws-eks-asg-rolling-update-handler
   namespace: kube-system
   labels:
-    k8s-app: aws-eks-asg-rolling-update-handler
+    app: aws-eks-asg-rolling-update-handler
 ---
 apiVersion: rbac.authorization.k8s.io/v1beta1
 kind: ClusterRole
 metadata:
   name: aws-eks-asg-rolling-update-handler
   labels:
-    k8s-app: aws-eks-asg-rolling-update-handler
+    app: aws-eks-asg-rolling-update-handler
 rules:
   - apiGroups:
       - "*"
@@ -136,7 +136,7 @@ kind: ClusterRoleBinding
 metadata:
   name: aws-eks-asg-rolling-update-handler
   labels:
-    k8s-app: aws-eks-asg-rolling-update-handler
+    app: aws-eks-asg-rolling-update-handler
 roleRef:
   kind: ClusterRole
   name: aws-eks-asg-rolling-update-handler
@@ -152,13 +152,13 @@ metadata:
   name: aws-eks-asg-rolling-update-handler
   namespace: kube-system
   labels:
-    k8s-app: aws-eks-asg-rolling-update-handler
+    app: aws-eks-asg-rolling-update-handler
 spec:
   replicas: 1
   template:
     metadata:
       labels:
-        k8s-app: aws-eks-asg-rolling-update-handler
+        app: aws-eks-asg-rolling-update-handler
     spec:
       automountServiceAccountToken: true
       serviceAccountName: aws-eks-asg-rolling-update-handler
