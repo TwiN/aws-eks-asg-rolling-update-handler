@@ -82,7 +82,7 @@ To function properly, this application requires the following permissions on AWS
 ## Deploying on Kubernetes
 
 ```yaml
-apiVersion: core/v1
+apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: aws-eks-asg-rolling-update-handler
@@ -90,7 +90,7 @@ metadata:
   labels:
     app: aws-eks-asg-rolling-update-handler
 ---
-apiVersion: rbac.authorization.k8s.io/v1beta1
+apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
   name: aws-eks-asg-rolling-update-handler
@@ -131,7 +131,7 @@ rules:
       - get
       - list
 ---
-apiVersion: rbac.authorization.k8s.io/v1beta1
+apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
   name: aws-eks-asg-rolling-update-handler
@@ -155,6 +155,9 @@ metadata:
     app: aws-eks-asg-rolling-update-handler
 spec:
   replicas: 1
+  selector:
+    matchLabels:
+      app: aws-eks-asg-rolling-update-handler
   template:
     metadata:
       labels:
