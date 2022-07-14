@@ -11,6 +11,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+// TODO: replace this by Kubernetes' official fake client (k8s.io/client-go/kubernetes/fake)
+
 type MockKubernetesClient struct {
 	Counter map[string]int64
 	Nodes   map[string]v1.Node
