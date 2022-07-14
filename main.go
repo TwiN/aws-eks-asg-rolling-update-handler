@@ -153,7 +153,7 @@ func DoHandleRollingUpgrade(kubernetesClient k8s.KubernetesClientApi, ec2Service
 			if minutesSinceStarted == -1 {
 				log.Printf("[%s][%s] Starting node rollout process", aws.StringValue(autoScalingGroup.AutoScalingGroupName), aws.StringValue(outdatedInstance.InstanceId))
 				// Annotate the node to persist the fact that the rolling update process has begun
-				err := k8s.AnnotateNodeByAwsAutoScalingInstance(kubernetesClient, outdatedInstance, k8s.RollingUpdateStartedTimestampAnnotationKey, time.Now().Format(time.RFC3339))
+				err := k8s.AnnotateNodeByAwsAutoScalingInstance(kubernetesClient, outdatedInstance, k8s.AnnotationRollingUpdateStartedTimestamp, time.Now().Format(time.RFC3339))
 				if err != nil {
 					log.Printf("[%s][%s] Skipping because unable to annotate node: %v", aws.StringValue(autoScalingGroup.AutoScalingGroupName), aws.StringValue(outdatedInstance.InstanceId), err.Error())
 					continue
@@ -174,7 +174,7 @@ func DoHandleRollingUpgrade(kubernetesClient k8s.KubernetesClientApi, ec2Service
 						} else {
 							metrics.Server.DrainedNodes.WithLabelValues(aws.StringValue(autoScalingGroup.AutoScalingGroupName)).Inc()
 							// Only annotate if no error was encountered
-							_ = k8s.AnnotateNodeByAwsAutoScalingInstance(kubernetesClient, outdatedInstance, k8s.RollingUpdateDrainedTimestampAnnotationKey, time.Now().Format(time.RFC3339))
+							_ = k8s.AnnotateNodeByAwsAutoScalingInstance(kubernetesClient, outdatedInstance, k8s.AnnotationRollingUpdateDrainedTimestamp, time.Now().Format(time.RFC3339))
 						}
 					} else {
 						log.Printf("[%s][%s] Node has already been drained %d minutes ago, skipping", aws.StringValue(autoScalingGroup.AutoScalingGroupName), aws.StringValue(outdatedInstance.InstanceId), minutesSinceDrained)
@@ -191,7 +191,7 @@ func DoHandleRollingUpgrade(kubernetesClient k8s.KubernetesClientApi, ec2Service
 						} else {
 							metrics.Server.ScaledDownNodes.WithLabelValues(aws.StringValue(autoScalingGroup.AutoScalingGroupName)).Inc()
 							// Only annotate if no error was encountered
-							_ = k8s.AnnotateNodeByAwsAutoScalingInstance(kubernetesClient, outdatedInstance, k8s.RollingUpdateTerminatedTimestampAnnotationKey, time.Now().Format(time.RFC3339))
+							_ = k8s.AnnotateNodeByAwsAutoScalingInstance(kubernetesClient, outdatedInstance, k8s.AnnotationRollingUpdateTerminatedTimestamp, time.Now().Format(time.RFC3339))
 						}
 					} else {
 						log.Printf("[%s][%s] Node is already in the process of being terminated since %d minutes ago, skipping", aws.StringValue(autoScalingGroup.AutoScalingGroupName), aws.StringValue(outdatedInstance.InstanceId), minutesSinceTerminated)
@@ -268,8 +268,8 @@ func getReadyNodesAndNumberOfNonReadyNodesOrInstances(updatedInstances []*autosc
 		// the termination would be skipped until the next run.
 		// This would cause an instance to be considered as updated, even though it has been drained therefore
 		// cordoned (NoSchedule).
-		if startedAtValue, ok := updatedNode.Annotations[k8s.RollingUpdateStartedTimestampAnnotationKey]; ok {
-			// An updated node should never have k8s.RollingUpdateStartedTimestampAnnotationKey, so this indicates that
+		if startedAtValue, ok := updatedNode.Annotations[k8s.AnnotationRollingUpdateStartedTimestamp]; ok {
+			// An updated node should never have k8s.AnnotationRollingUpdateStartedTimestamp, so this indicates that
 			// at one point, this node was considered old compared to the ASG's current LT/LC
 			// First, check if there's a NoSchedule taint
 			for i, taint := range updatedNode.Spec.Taints {
@@ -283,7 +283,7 @@ func getReadyNodesAndNumberOfNonReadyNodesOrInstances(updatedInstances []*autosc
 						// Remove the taint
 						updatedNode.Spec.Taints = append(updatedNode.Spec.Taints[:i], updatedNode.Spec.Taints[i+1:]...)
 						// Remove the annotation
-						delete(updatedNode.Annotations, k8s.RollingUpdateStartedTimestampAnnotationKey)
+						delete(updatedNode.Annotations, k8s.AnnotationRollingUpdateStartedTimestamp)
 						// Update the node
 						err = kubernetesClient.UpdateNode(updatedNode)
 						if err != nil {
@@ -299,7 +299,7 @@ func getReadyNodesAndNumberOfNonReadyNodesOrInstances(updatedInstances []*autosc
 }
 
 func getRollingUpdateTimestampsFromNode(node *v1.Node) (minutesSinceStarted int, minutesSinceDrained int, minutesSinceTerminated int) {
-	rollingUpdateStartedAt, ok := node.Annotations[k8s.RollingUpdateStartedTimestampAnnotationKey]
+	rollingUpdateStartedAt, ok := node.Annotations[k8s.AnnotationRollingUpdateStartedTimestamp]
 	if ok {
 		startedAt, err := time.Parse(time.RFC3339, rollingUpdateStartedAt)
 		if err == nil {
@@ -308,7 +308,7 @@ func getRollingUpdateTimestampsFromNode(node *v1.Node) (minutesSinceStarted int,
 	} else {
 		minutesSinceStarted = -1
 	}
-	drainedAtValue, ok := node.Annotations[k8s.RollingUpdateDrainedTimestampAnnotationKey]
+	drainedAtValue, ok := node.Annotations[k8s.AnnotationRollingUpdateDrainedTimestamp]
 	if ok {
 		drainedAt, err := time.Parse(time.RFC3339, drainedAtValue)
 		if err == nil {
@@ -317,7 +317,7 @@ func getRollingUpdateTimestampsFromNode(node *v1.Node) (minutesSinceStarted int,
 	} else {
 		minutesSinceDrained = -1
 	}
-	terminatedAtValue, ok := node.Annotations[k8s.RollingUpdateTerminatedTimestampAnnotationKey]
+	terminatedAtValue, ok := node.Annotations[k8s.AnnotationRollingUpdateTerminatedTimestamp]
 	if ok {
 		terminatedAt, err := time.Parse(time.RFC3339, terminatedAtValue)
 		if err == nil {

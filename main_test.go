@@ -219,14 +219,14 @@ func TestHandleRollingUpgrade(t *testing.T) {
 		t.Error("Node should've been annotated, meaning that UpdateNode should've been called once")
 	}
 	oldNode = mockKubernetesClient.Nodes[oldNode.Name]
-	if _, ok := oldNode.GetAnnotations()[k8s.RollingUpdateStartedTimestampAnnotationKey]; !ok {
-		t.Error("Node should've been annotated with", k8s.RollingUpdateStartedTimestampAnnotationKey)
+	if _, ok := oldNode.GetAnnotations()[k8s.AnnotationRollingUpdateStartedTimestamp]; !ok {
+		t.Error("Node should've been annotated with", k8s.AnnotationRollingUpdateStartedTimestamp)
 	}
-	if _, ok := oldNode.GetAnnotations()[k8s.RollingUpdateDrainedTimestampAnnotationKey]; ok {
-		t.Error("Node shouldn't have been drained yet, therefore shouldn't have been annotated with", k8s.RollingUpdateDrainedTimestampAnnotationKey)
+	if _, ok := oldNode.GetAnnotations()[k8s.AnnotationRollingUpdateDrainedTimestamp]; ok {
+		t.Error("Node shouldn't have been drained yet, therefore shouldn't have been annotated with", k8s.AnnotationRollingUpdateDrainedTimestamp)
 	}
-	if _, ok := oldNode.GetAnnotations()[k8s.RollingUpdateTerminatedTimestampAnnotationKey]; ok {
-		t.Error("Node shouldn't have been terminated yet, therefore shouldn't have been annotated with", k8s.RollingUpdateTerminatedTimestampAnnotationKey)
+	if _, ok := oldNode.GetAnnotations()[k8s.AnnotationRollingUpdateTerminatedTimestamp]; ok {
+		t.Error("Node shouldn't have been terminated yet, therefore shouldn't have been annotated with", k8s.AnnotationRollingUpdateTerminatedTimestamp)
 	}
 
 	// Second run (ASG's desired capacity gets increased)
@@ -239,8 +239,8 @@ func TestHandleRollingUpgrade(t *testing.T) {
 		t.Error("The desired capacity of the ASG should've been increased to 2")
 	}
 	oldNode = mockKubernetesClient.Nodes[oldNode.Name]
-	if _, ok := oldNode.GetAnnotations()[k8s.RollingUpdateDrainedTimestampAnnotationKey]; ok {
-		t.Error("Node shouldn't have been drained yet, therefore shouldn't have been annotated with", k8s.RollingUpdateDrainedTimestampAnnotationKey)
+	if _, ok := oldNode.GetAnnotations()[k8s.AnnotationRollingUpdateDrainedTimestamp]; ok {
+		t.Error("Node shouldn't have been drained yet, therefore shouldn't have been annotated with", k8s.AnnotationRollingUpdateDrainedTimestamp)
 	}
 
 	// Third run (Nothing changed)
@@ -253,8 +253,8 @@ func TestHandleRollingUpgrade(t *testing.T) {
 		t.Error("The desired capacity of the ASG should've stayed at 2")
 	}
 	oldNode = mockKubernetesClient.Nodes[oldNode.Name]
-	if _, ok := oldNode.GetAnnotations()[k8s.RollingUpdateDrainedTimestampAnnotationKey]; ok {
-		t.Error("Node shouldn't have been drained yet, therefore shouldn't have been annotated with", k8s.RollingUpdateDrainedTimestampAnnotationKey)
+	if _, ok := oldNode.GetAnnotations()[k8s.AnnotationRollingUpdateDrainedTimestamp]; ok {
+		t.Error("Node shouldn't have been drained yet, therefore shouldn't have been annotated with", k8s.AnnotationRollingUpdateDrainedTimestamp)
 	}
 
 	// Fourth run (new instance has been registered to ASG, but is pending)
@@ -265,16 +265,16 @@ func TestHandleRollingUpgrade(t *testing.T) {
 		t.Error("Desired capacity shouldn't have been updated")
 	}
 	oldNode = mockKubernetesClient.Nodes[oldNode.Name]
-	if _, ok := oldNode.GetAnnotations()[k8s.RollingUpdateDrainedTimestampAnnotationKey]; ok {
-		t.Error("Node shouldn't have been drained yet, therefore shouldn't have been annotated with", k8s.RollingUpdateDrainedTimestampAnnotationKey)
+	if _, ok := oldNode.GetAnnotations()[k8s.AnnotationRollingUpdateDrainedTimestamp]; ok {
+		t.Error("Node shouldn't have been drained yet, therefore shouldn't have been annotated with", k8s.AnnotationRollingUpdateDrainedTimestamp)
 	}
 
 	// Fifth run (new instance is now InService, but node has still not joined cluster (GetNodeByAwsAutoScalingInstance should return not found))
 	newInstance.SetLifecycleState("InService")
 	HandleRollingUpgrade(mockKubernetesClient, mockEc2Service, mockAutoScalingService, []*autoscaling.Group{asg})
 	oldNode = mockKubernetesClient.Nodes[oldNode.Name]
-	if _, ok := oldNode.GetAnnotations()[k8s.RollingUpdateDrainedTimestampAnnotationKey]; ok {
-		t.Error("Node shouldn't have been drained yet, therefore shouldn't have been annotated with", k8s.RollingUpdateDrainedTimestampAnnotationKey)
+	if _, ok := oldNode.GetAnnotations()[k8s.AnnotationRollingUpdateDrainedTimestamp]; ok {
+		t.Error("Node shouldn't have been drained yet, therefore shouldn't have been annotated with", k8s.AnnotationRollingUpdateDrainedTimestamp)
 	}
 
 	// Sixth run (new instance has joined the cluster, but Kubelet isn't ready to accept pods yet)
@@ -283,8 +283,8 @@ func TestHandleRollingUpgrade(t *testing.T) {
 	mockKubernetesClient.Nodes[newNode.Name] = newNode
 	HandleRollingUpgrade(mockKubernetesClient, mockEc2Service, mockAutoScalingService, []*autoscaling.Group{asg})
 	oldNode = mockKubernetesClient.Nodes[oldNode.Name]
-	if _, ok := oldNode.GetAnnotations()[k8s.RollingUpdateDrainedTimestampAnnotationKey]; ok {
-		t.Error("Node shouldn't have been drained yet, therefore shouldn't have been annotated with", k8s.RollingUpdateDrainedTimestampAnnotationKey)
+	if _, ok := oldNode.GetAnnotations()[k8s.AnnotationRollingUpdateDrainedTimestamp]; ok {
+		t.Error("Node shouldn't have been drained yet, therefore shouldn't have been annotated with", k8s.AnnotationRollingUpdateDrainedTimestamp)
 	}
 
 	// Seventh run (Kubelet is ready to accept new pods. Old node gets drained and terminated)
@@ -293,10 +293,10 @@ func TestHandleRollingUpgrade(t *testing.T) {
 	mockKubernetesClient.Nodes[newNode.Name] = newNode
 	HandleRollingUpgrade(mockKubernetesClient, mockEc2Service, mockAutoScalingService, []*autoscaling.Group{asg})
 	oldNode = mockKubernetesClient.Nodes[oldNode.Name]
-	if _, ok := oldNode.GetAnnotations()[k8s.RollingUpdateDrainedTimestampAnnotationKey]; !ok {
+	if _, ok := oldNode.GetAnnotations()[k8s.AnnotationRollingUpdateDrainedTimestamp]; !ok {
 		t.Error("Node should've been drained")
 	}
-	if _, ok := oldNode.GetAnnotations()[k8s.RollingUpdateTerminatedTimestampAnnotationKey]; !ok {
+	if _, ok := oldNode.GetAnnotations()[k8s.AnnotationRollingUpdateTerminatedTimestamp]; !ok {
 		t.Error("Node should've been terminated")
 	}
 }
@@ -334,14 +334,14 @@ func TestHandleRollingUpgrade_withLaunchTemplate(t *testing.T) {
 		t.Error("Node should've been annotated, meaning that UpdateNode should've been called once")
 	}
 	oldNode = mockKubernetesClient.Nodes[oldNode.Name]
-	if _, ok := oldNode.GetAnnotations()[k8s.RollingUpdateStartedTimestampAnnotationKey]; !ok {
-		t.Error("Node should've been annotated with", k8s.RollingUpdateStartedTimestampAnnotationKey)
+	if _, ok := oldNode.GetAnnotations()[k8s.AnnotationRollingUpdateStartedTimestamp]; !ok {
+		t.Error("Node should've been annotated with", k8s.AnnotationRollingUpdateStartedTimestamp)
 	}
-	if _, ok := oldNode.GetAnnotations()[k8s.RollingUpdateDrainedTimestampAnnotationKey]; ok {
-		t.Error("Node shouldn't have been drained yet, therefore shouldn't have been annotated with", k8s.RollingUpdateDrainedTimestampAnnotationKey)
+	if _, ok := oldNode.GetAnnotations()[k8s.AnnotationRollingUpdateDrainedTimestamp]; ok {
+		t.Error("Node shouldn't have been drained yet, therefore shouldn't have been annotated with", k8s.AnnotationRollingUpdateDrainedTimestamp)
 	}
-	if _, ok := oldNode.GetAnnotations()[k8s.RollingUpdateTerminatedTimestampAnnotationKey]; ok {
-		t.Error("Node shouldn't have been terminated yet, therefore shouldn't have been annotated with", k8s.RollingUpdateTerminatedTimestampAnnotationKey)
+	if _, ok := oldNode.GetAnnotations()[k8s.AnnotationRollingUpdateTerminatedTimestamp]; ok {
+		t.Error("Node shouldn't have been terminated yet, therefore shouldn't have been annotated with", k8s.AnnotationRollingUpdateTerminatedTimestamp)
 	}
 
 	// Second run (ASG's desired capacity gets increased)
@@ -354,8 +354,8 @@ func TestHandleRollingUpgrade_withLaunchTemplate(t *testing.T) {
 		t.Error("The desired capacity of the ASG should've been increased to 2")
 	}
 	oldNode = mockKubernetesClient.Nodes[oldNode.Name]
-	if _, ok := oldNode.GetAnnotations()[k8s.RollingUpdateDrainedTimestampAnnotationKey]; ok {
-		t.Error("Node shouldn't have been drained yet, therefore shouldn't have been annotated with", k8s.RollingUpdateDrainedTimestampAnnotationKey)
+	if _, ok := oldNode.GetAnnotations()[k8s.AnnotationRollingUpdateDrainedTimestamp]; ok {
+		t.Error("Node shouldn't have been drained yet, therefore shouldn't have been annotated with", k8s.AnnotationRollingUpdateDrainedTimestamp)
 	}
 
 	// Third run (Nothing changed)
@@ -368,8 +368,8 @@ func TestHandleRollingUpgrade_withLaunchTemplate(t *testing.T) {
 		t.Error("The desired capacity of the ASG should've stayed at 2")
 	}
 	oldNode = mockKubernetesClient.Nodes[oldNode.Name]
-	if _, ok := oldNode.GetAnnotations()[k8s.RollingUpdateDrainedTimestampAnnotationKey]; ok {
-		t.Error("Node shouldn't have been drained yet, therefore shouldn't have been annotated with", k8s.RollingUpdateDrainedTimestampAnnotationKey)
+	if _, ok := oldNode.GetAnnotations()[k8s.AnnotationRollingUpdateDrainedTimestamp]; ok {
+		t.Error("Node shouldn't have been drained yet, therefore shouldn't have been annotated with", k8s.AnnotationRollingUpdateDrainedTimestamp)
 	}
 
 	// Fourth run (new instance has been registered to ASG, but is pending)
@@ -380,16 +380,16 @@ func TestHandleRollingUpgrade_withLaunchTemplate(t *testing.T) {
 		t.Error("Desired capacity shouldn't have been updated")
 	}
 	oldNode = mockKubernetesClient.Nodes[oldNode.Name]
-	if _, ok := oldNode.GetAnnotations()[k8s.RollingUpdateDrainedTimestampAnnotationKey]; ok {
-		t.Error("Node shouldn't have been drained yet, therefore shouldn't have been annotated with", k8s.RollingUpdateDrainedTimestampAnnotationKey)
+	if _, ok := oldNode.GetAnnotations()[k8s.AnnotationRollingUpdateDrainedTimestamp]; ok {
+		t.Error("Node shouldn't have been drained yet, therefore shouldn't have been annotated with", k8s.AnnotationRollingUpdateDrainedTimestamp)
 	}
 
 	// Fifth run (new instance is now InService, but node has still not joined cluster (GetNodeByAwsAutoScalingInstance should return not found))
 	newInstance.SetLifecycleState("InService")
 	HandleRollingUpgrade(mockKubernetesClient, mockEc2Service, mockAutoScalingService, []*autoscaling.Group{asg})
 	oldNode = mockKubernetesClient.Nodes[oldNode.Name]
-	if _, ok := oldNode.GetAnnotations()[k8s.RollingUpdateDrainedTimestampAnnotationKey]; ok {
-		t.Error("Node shouldn't have been drained yet, therefore shouldn't have been annotated with", k8s.RollingUpdateDrainedTimestampAnnotationKey)
+	if _, ok := oldNode.GetAnnotations()[k8s.AnnotationRollingUpdateDrainedTimestamp]; ok {
+		t.Error("Node shouldn't have been drained yet, therefore shouldn't have been annotated with", k8s.AnnotationRollingUpdateDrainedTimestamp)
 	}
 
 	// Sixth run (new instance has joined the cluster, but Kubelet isn't ready to accept pods yet)
@@ -398,8 +398,8 @@ func TestHandleRollingUpgrade_withLaunchTemplate(t *testing.T) {
 	mockKubernetesClient.Nodes[newNode.Name] = newNode
 	HandleRollingUpgrade(mockKubernetesClient, mockEc2Service, mockAutoScalingService, []*autoscaling.Group{asg})
 	oldNode = mockKubernetesClient.Nodes[oldNode.Name]
-	if _, ok := oldNode.GetAnnotations()[k8s.RollingUpdateDrainedTimestampAnnotationKey]; ok {
-		t.Error("Node shouldn't have been drained yet, therefore shouldn't have been annotated with", k8s.RollingUpdateDrainedTimestampAnnotationKey)
+	if _, ok := oldNode.GetAnnotations()[k8s.AnnotationRollingUpdateDrainedTimestamp]; ok {
+		t.Error("Node shouldn't have been drained yet, therefore shouldn't have been annotated with", k8s.AnnotationRollingUpdateDrainedTimestamp)
 	}
 
 	// Seventh run (Kubelet is ready to accept new pods. Old node gets drained and terminated)
@@ -408,10 +408,10 @@ func TestHandleRollingUpgrade_withLaunchTemplate(t *testing.T) {
 	mockKubernetesClient.Nodes[newNode.Name] = newNode
 	HandleRollingUpgrade(mockKubernetesClient, mockEc2Service, mockAutoScalingService, []*autoscaling.Group{asg})
 	oldNode = mockKubernetesClient.Nodes[oldNode.Name]
-	if _, ok := oldNode.GetAnnotations()[k8s.RollingUpdateDrainedTimestampAnnotationKey]; !ok {
+	if _, ok := oldNode.GetAnnotations()[k8s.AnnotationRollingUpdateDrainedTimestamp]; !ok {
 		t.Error("Node should've been drained")
 	}
-	if _, ok := oldNode.GetAnnotations()[k8s.RollingUpdateTerminatedTimestampAnnotationKey]; !ok {
+	if _, ok := oldNode.GetAnnotations()[k8s.AnnotationRollingUpdateTerminatedTimestamp]; !ok {
 		t.Error("Node should've been terminated")
 	}
 }
@@ -466,14 +466,14 @@ func TestHandleRollingUpgrade_withEnoughPodsToRequireTwoNewNodes(t *testing.T) {
 		t.Error("Node should've been annotated, meaning that UpdateNode should've been called once")
 	}
 	oldNode = mockKubernetesClient.Nodes[oldNode.Name]
-	if _, ok := oldNode.GetAnnotations()[k8s.RollingUpdateStartedTimestampAnnotationKey]; !ok {
-		t.Error("Node should've been annotated with", k8s.RollingUpdateStartedTimestampAnnotationKey)
+	if _, ok := oldNode.GetAnnotations()[k8s.AnnotationRollingUpdateStartedTimestamp]; !ok {
+		t.Error("Node should've been annotated with", k8s.AnnotationRollingUpdateStartedTimestamp)
 	}
-	if _, ok := oldNode.GetAnnotations()[k8s.RollingUpdateDrainedTimestampAnnotationKey]; ok {
-		t.Error("Node shouldn't have been drained yet, therefore shouldn't have been annotated with", k8s.RollingUpdateDrainedTimestampAnnotationKey)
+	if _, ok := oldNode.GetAnnotations()[k8s.AnnotationRollingUpdateDrainedTimestamp]; ok {
+		t.Error("Node shouldn't have been drained yet, therefore shouldn't have been annotated with", k8s.AnnotationRollingUpdateDrainedTimestamp)
 	}
-	if _, ok := oldNode.GetAnnotations()[k8s.RollingUpdateTerminatedTimestampAnnotationKey]; ok {
-		t.Error("Node shouldn't have been terminated yet, therefore shouldn't have been annotated with", k8s.RollingUpdateTerminatedTimestampAnnotationKey)
+	if _, ok := oldNode.GetAnnotations()[k8s.AnnotationRollingUpdateTerminatedTimestamp]; ok {
+		t.Error("Node shouldn't have been terminated yet, therefore shouldn't have been annotated with", k8s.AnnotationRollingUpdateTerminatedTimestamp)
 	}
 
 	// Second run (ASG's desired capacity gets increased)
@@ -486,8 +486,8 @@ func TestHandleRollingUpgrade_withEnoughPodsToRequireTwoNewNodes(t *testing.T) {
 		t.Error("The desired capacity of the ASG should've been increased to 2")
 	}
 	oldNode = mockKubernetesClient.Nodes[oldNode.Name]
-	if _, ok := oldNode.GetAnnotations()[k8s.RollingUpdateDrainedTimestampAnnotationKey]; ok {
-		t.Error("Node shouldn't have been drained yet, therefore shouldn't have been annotated with", k8s.RollingUpdateDrainedTimestampAnnotationKey)
+	if _, ok := oldNode.GetAnnotations()[k8s.AnnotationRollingUpdateDrainedTimestamp]; ok {
+		t.Error("Node shouldn't have been drained yet, therefore shouldn't have been annotated with", k8s.AnnotationRollingUpdateDrainedTimestamp)
 	}
 
 	// Third run (Nothing changed)
@@ -500,8 +500,8 @@ func TestHandleRollingUpgrade_withEnoughPodsToRequireTwoNewNodes(t *testing.T) {
 		t.Error("The desired capacity of the ASG should've stayed at 2")
 	}
 	oldNode = mockKubernetesClient.Nodes[oldNode.Name]
-	if _, ok := oldNode.GetAnnotations()[k8s.RollingUpdateDrainedTimestampAnnotationKey]; ok {
-		t.Error("Node shouldn't have been drained yet, therefore shouldn't have been annotated with", k8s.RollingUpdateDrainedTimestampAnnotationKey)
+	if _, ok := oldNode.GetAnnotations()[k8s.AnnotationRollingUpdateDrainedTimestamp]; ok {
+		t.Error("Node shouldn't have been drained yet, therefore shouldn't have been annotated with", k8s.AnnotationRollingUpdateDrainedTimestamp)
 	}
 
 	// Fourth run (new instance has been registered to ASG, but is pending)
@@ -512,16 +512,16 @@ func TestHandleRollingUpgrade_withEnoughPodsToRequireTwoNewNodes(t *testing.T) {
 		t.Error("Desired capacity shouldn't have been updated")
 	}
 	oldNode = mockKubernetesClient.Nodes[oldNode.Name]
-	if _, ok := oldNode.GetAnnotations()[k8s.RollingUpdateDrainedTimestampAnnotationKey]; ok {
-		t.Error("Node shouldn't have been drained yet, therefore shouldn't have been annotated with", k8s.RollingUpdateDrainedTimestampAnnotationKey)
+	if _, ok := oldNode.GetAnnotations()[k8s.AnnotationRollingUpdateDrainedTimestamp]; ok {
+		t.Error("Node shouldn't have been drained yet, therefore shouldn't have been annotated with", k8s.AnnotationRollingUpdateDrainedTimestamp)
 	}
 
 	// Fifth run (new instance is now InService, but node has still not joined cluster (GetNodeByAwsAutoScalingInstance should return not found))
 	newInstance.SetLifecycleState("InService")
 	HandleRollingUpgrade(mockKubernetesClient, mockEc2Service, mockAutoScalingService, []*autoscaling.Group{asg})
 	oldNode = mockKubernetesClient.Nodes[oldNode.Name]
-	if _, ok := oldNode.GetAnnotations()[k8s.RollingUpdateDrainedTimestampAnnotationKey]; ok {
-		t.Error("Node shouldn't have been drained yet, therefore shouldn't have been annotated with", k8s.RollingUpdateDrainedTimestampAnnotationKey)
+	if _, ok := oldNode.GetAnnotations()[k8s.AnnotationRollingUpdateDrainedTimestamp]; ok {
+		t.Error("Node shouldn't have been drained yet, therefore shouldn't have been annotated with", k8s.AnnotationRollingUpdateDrainedTimestamp)
 	}
 
 	// Sixth run (new instance has joined the cluster, but Kubelet isn't ready to accept pods yet)
@@ -530,8 +530,8 @@ func TestHandleRollingUpgrade_withEnoughPodsToRequireTwoNewNodes(t *testing.T) {
 	mockKubernetesClient.Nodes[newNode.Name] = newNode
 	HandleRollingUpgrade(mockKubernetesClient, mockEc2Service, mockAutoScalingService, []*autoscaling.Group{asg})
 	oldNode = mockKubernetesClient.Nodes[oldNode.Name]
-	if _, ok := oldNode.GetAnnotations()[k8s.RollingUpdateDrainedTimestampAnnotationKey]; ok {
-		t.Error("Node shouldn't have been drained yet, therefore shouldn't have been annotated with", k8s.RollingUpdateDrainedTimestampAnnotationKey)
+	if _, ok := oldNode.GetAnnotations()[k8s.AnnotationRollingUpdateDrainedTimestamp]; ok {
+		t.Error("Node shouldn't have been drained yet, therefore shouldn't have been annotated with", k8s.AnnotationRollingUpdateDrainedTimestamp)
 	}
 
 	// Seventh run (Kubelet is ready to accept new pods)
@@ -540,8 +540,8 @@ func TestHandleRollingUpgrade_withEnoughPodsToRequireTwoNewNodes(t *testing.T) {
 	mockKubernetesClient.Nodes[newNode.Name] = newNode
 	HandleRollingUpgrade(mockKubernetesClient, mockEc2Service, mockAutoScalingService, []*autoscaling.Group{asg})
 	oldNode = mockKubernetesClient.Nodes[oldNode.Name]
-	if _, ok := oldNode.GetAnnotations()[k8s.RollingUpdateDrainedTimestampAnnotationKey]; ok {
-		t.Error("Node shouldn't have been drained yet, therefore shouldn't have been annotated with", k8s.RollingUpdateDrainedTimestampAnnotationKey)
+	if _, ok := oldNode.GetAnnotations()[k8s.AnnotationRollingUpdateDrainedTimestamp]; ok {
+		t.Error("Node shouldn't have been drained yet, therefore shouldn't have been annotated with", k8s.AnnotationRollingUpdateDrainedTimestamp)
 	}
 
 	// Eight run (ASG's desired capacity gets increased)
@@ -554,8 +554,8 @@ func TestHandleRollingUpgrade_withEnoughPodsToRequireTwoNewNodes(t *testing.T) {
 		t.Error("The desired capacity of the ASG should've been increased to 3")
 	}
 	oldNode = mockKubernetesClient.Nodes[oldNode.Name]
-	if _, ok := oldNode.GetAnnotations()[k8s.RollingUpdateDrainedTimestampAnnotationKey]; ok {
-		t.Error("Node shouldn't have been drained yet, therefore shouldn't have been annotated with", k8s.RollingUpdateDrainedTimestampAnnotationKey)
+	if _, ok := oldNode.GetAnnotations()[k8s.AnnotationRollingUpdateDrainedTimestamp]; ok {
+		t.Error("Node shouldn't have been drained yet, therefore shouldn't have been annotated with", k8s.AnnotationRollingUpdateDrainedTimestamp)
 	}
 
 	// Ninth run (fast-forward new instance, node and kubelet ready to accept. Old node gets drained and terminated)
@@ -566,10 +566,10 @@ func TestHandleRollingUpgrade_withEnoughPodsToRequireTwoNewNodes(t *testing.T) {
 	mockKubernetesClient.Nodes[newSecondNode.Name] = newSecondNode
 	HandleRollingUpgrade(mockKubernetesClient, mockEc2Service, mockAutoScalingService, []*autoscaling.Group{asg})
 	oldNode = mockKubernetesClient.Nodes[oldNode.Name]
-	if _, ok := oldNode.GetAnnotations()[k8s.RollingUpdateDrainedTimestampAnnotationKey]; !ok {
+	if _, ok := oldNode.GetAnnotations()[k8s.AnnotationRollingUpdateDrainedTimestamp]; !ok {
 		t.Error("Node should've been drained")
 	}
-	if _, ok := oldNode.GetAnnotations()[k8s.RollingUpdateTerminatedTimestampAnnotationKey]; !ok {
+	if _, ok := oldNode.GetAnnotations()[k8s.AnnotationRollingUpdateTerminatedTimestamp]; !ok {
 		t.Error("Node should've been terminated")
 	}
 }
