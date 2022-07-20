@@ -15,7 +15,8 @@ const (
 	EnvEnvironment           = "ENVIRONMENT"
 	EnvDebug                 = "DEBUG"
 	EnvIgnoreDaemonSets      = "IGNORE_DAEMON_SETS"
-	EnvDeleteLocalData       = "DELETE_LOCAL_DATA"
+	EnvDeleteLocalData       = "DELETE_LOCAL_DATA" // Deprecated: in favor of DeleteEmptyDirData (DELETE_EMPTY_DIR_DATA)
+	EnvDeleteEmptyDirData    = "DELETE_EMPTY_DIR_DATA"
 	EnvClusterName           = "CLUSTER_NAME"
 	EnvAutodiscoveryTags     = "AUTODISCOVERY_TAGS"
 	EnvAutoScalingGroupNames = "AUTO_SCALING_GROUP_NAMES"
@@ -33,7 +34,7 @@ type config struct {
 	AutodiscoveryTags     string        // Required if AutoScalingGroupNames not provided
 	AwsRegion             string        // Defaults to us-west-2
 	IgnoreDaemonSets      bool          // Defaults to true
-	DeleteLocalData       bool          // Defaults to true
+	DeleteEmptyDirData    bool          // Defaults to true
 	ExecutionInterval     time.Duration // Defaults to 20s
 	ExecutionTimeout      time.Duration // Defaults to 900s
 	Metrics               bool          // Defaults to false
@@ -59,7 +60,12 @@ func Initialize() error {
 		cfg.IgnoreDaemonSets = true
 	}
 	if deleteLocalData := strings.ToLower(os.Getenv(EnvDeleteLocalData)); len(deleteLocalData) == 0 || deleteLocalData == "true" {
-		cfg.DeleteLocalData = true
+		log.Println("NOTICE: Environment variable '" + EnvDeleteLocalData + "' has been deprecated in favor of '" + EnvDeleteEmptyDirData + "'.")
+		log.Println("NOTICE: Make sure to update your configuration, as said deprecated environment variable will be removed in a future release.")
+		cfg.DeleteEmptyDirData = true
+	}
+	if deleteEmptyDirData := strings.ToLower(os.Getenv(EnvDeleteEmptyDirData)); len(deleteEmptyDirData) == 0 || deleteEmptyDirData == "true" {
+		cfg.DeleteEmptyDirData = true
 	}
 	if awsRegion := strings.ToLower(os.Getenv(EnvAwsRegion)); len(awsRegion) == 0 {
 		log.Printf("Environment variable '%s' not specified, defaulting to us-west-2", EnvAwsRegion)
@@ -105,11 +111,11 @@ func Initialize() error {
 
 // Set sets the application's configuration and is intended to be used for testing purposes.
 // See Initialize() for production
-func Set(autoScalingGroupNames []string, ignoreDaemonSets, deleteLocalData bool) {
+func Set(autoScalingGroupNames []string, ignoreDaemonSets, deleteEmptyDirData bool) {
 	cfg = &config{
 		AutoScalingGroupNames: autoScalingGroupNames,
 		IgnoreDaemonSets:      ignoreDaemonSets,
-		DeleteLocalData:       deleteLocalData,
+		DeleteEmptyDirData:    deleteEmptyDirData,
 	}
 }
 

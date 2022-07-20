@@ -19,7 +19,7 @@ func TestInitialize(t *testing.T) {
 	if config.IgnoreDaemonSets {
 		t.Error()
 	}
-	if config.DeleteLocalData {
+	if config.DeleteEmptyDirData {
 		t.Error()
 	}
 }
@@ -35,7 +35,7 @@ func TestInitialize_withDefaultNonRequiredValues(t *testing.T) {
 	if !config.IgnoreDaemonSets {
 		t.Error("should've defaulted to ignoring daemon sets")
 	}
-	if !config.DeleteLocalData {
+	if !config.DeleteEmptyDirData {
 		t.Error("should've defaulted to deleting local data")
 	}
 }
@@ -55,7 +55,7 @@ func TestSet(t *testing.T) {
 	if !config.IgnoreDaemonSets {
 		t.Error()
 	}
-	if !config.DeleteLocalData {
+	if !config.DeleteEmptyDirData {
 		t.Error()
 	}
 }
