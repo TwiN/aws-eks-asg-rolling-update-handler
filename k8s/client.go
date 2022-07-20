@@ -33,7 +33,7 @@ type KubernetesClientApi interface {
 	GetNodeByAwsAutoScalingInstance(instance *autoscaling.Instance) (*v1.Node, error)
 	FilterNodeByAutoScalingInstance(nodes []v1.Node, instance *autoscaling.Instance) (*v1.Node, error)
 	UpdateNode(node *v1.Node) error
-	Drain(nodeName string, ignoreDaemonSets, deleteLocalData bool) error
+	Drain(nodeName string, ignoreDaemonSets, deleteEmptyDirData bool) error
 }
 
 type KubernetesClient struct {
@@ -122,7 +122,7 @@ func (k *KubernetesClient) UpdateNode(node *v1.Node) error {
 }
 
 // Drain gracefully deletes all pods from a given node
-func (k *KubernetesClient) Drain(nodeName string, ignoreDaemonSets, deleteLocalData bool) error {
+func (k *KubernetesClient) Drain(nodeName string, ignoreDaemonSets, deleteEmptyDirData bool) error {
 	node, err := k.client.CoreV1().Nodes().Get(context.TODO(), nodeName, metav1.GetOptions{})
 	if err != nil {
 		return err
@@ -131,7 +131,7 @@ func (k *KubernetesClient) Drain(nodeName string, ignoreDaemonSets, deleteLocalD
 		Client:              k.client,
 		Force:               true,
 		IgnoreAllDaemonSets: ignoreDaemonSets,
-		DeleteLocalData:     deleteLocalData,
+		DeleteEmptyDirData:  deleteEmptyDirData,
 		GracePeriodSeconds:  -1,
 		Timeout:             5 * time.Minute,
 		Out:                 drainLogger{NodeName: nodeName},
