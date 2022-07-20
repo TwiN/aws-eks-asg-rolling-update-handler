@@ -59,10 +59,15 @@ func Initialize() error {
 	if ignoreDaemonSets := strings.ToLower(os.Getenv(EnvIgnoreDaemonSets)); len(ignoreDaemonSets) == 0 || ignoreDaemonSets == "true" {
 		cfg.IgnoreDaemonSets = true
 	}
-	if deleteLocalData := strings.ToLower(os.Getenv(EnvDeleteLocalData)); len(deleteLocalData) == 0 || deleteLocalData == "true" {
+	// if the deprecated EnvDeleteLocalData is set, we need to set EnvDeleteEmptyDirData to its value
+	if deleteLocalData := strings.ToLower(os.Getenv(EnvDeleteLocalData)); len(deleteLocalData) > 0 {
 		log.Println("NOTICE: Environment variable '" + EnvDeleteLocalData + "' has been deprecated in favor of '" + EnvDeleteEmptyDirData + "'.")
 		log.Println("NOTICE: Make sure to update your configuration, as said deprecated environment variable will be removed in a future release.")
-		cfg.DeleteEmptyDirData = true
+		if len(os.Getenv(EnvDeleteEmptyDirData)) == 0 {
+			_ = os.Setenv(EnvDeleteEmptyDirData, deleteLocalData)
+		} else {
+			log.Println("WARNING: Both '" + EnvDeleteLocalData + "' and '" + EnvDeleteEmptyDirData + "' are set. The former is deprecated, and will be ignored.")
+		}
 	}
 	if deleteEmptyDirData := strings.ToLower(os.Getenv(EnvDeleteEmptyDirData)); len(deleteEmptyDirData) == 0 || deleteEmptyDirData == "true" {
 		cfg.DeleteEmptyDirData = true
