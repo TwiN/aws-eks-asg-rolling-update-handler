@@ -37,11 +37,11 @@ type KubernetesClientApi interface {
 }
 
 type KubernetesClient struct {
-	client *kubernetes.Clientset
+	client kubernetes.Interface
 }
 
 // NewKubernetesClient creates a new KubernetesClient
-func NewKubernetesClient(client *kubernetes.Clientset) *KubernetesClient {
+func NewKubernetesClient(client kubernetes.Interface) *KubernetesClient {
 	return &KubernetesClient{
 		client: client,
 	}
@@ -134,6 +134,7 @@ func (k *KubernetesClient) Drain(nodeName string, ignoreDaemonSets, deleteEmptyD
 		DeleteEmptyDirData:  deleteEmptyDirData,
 		GracePeriodSeconds:  -1,
 		Timeout:             5 * time.Minute,
+		Ctx:                 context.TODO(),
 		Out:                 drainLogger{NodeName: nodeName},
 		ErrOut:              drainLogger{NodeName: nodeName},
 		OnPodDeletedOrEvicted: func(pod *v1.Pod, usingEviction bool) {
