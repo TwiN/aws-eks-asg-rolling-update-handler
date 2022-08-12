@@ -27,28 +27,28 @@ var (
 	cache = gocache.NewCache().WithMaxSize(1000).WithEvictionPolicy(gocache.LeastRecentlyUsed)
 )
 
-type KubernetesClientApi interface {
+type ClientAPI interface {
 	GetNodes() ([]v1.Node, error)
-	GetPodsInNode(node string) ([]v1.Pod, error)
-	GetNodeByAwsAutoScalingInstance(instance *autoscaling.Instance) (*v1.Node, error)
+	GetPodsInNode(nodeName string) ([]v1.Pod, error)
+	GetNodeByAutoScalingInstance(instance *autoscaling.Instance) (*v1.Node, error)
 	FilterNodeByAutoScalingInstance(nodes []v1.Node, instance *autoscaling.Instance) (*v1.Node, error)
 	UpdateNode(node *v1.Node) error
 	Drain(nodeName string, ignoreDaemonSets, deleteEmptyDirData bool) error
 }
 
-type KubernetesClient struct {
+type Client struct {
 	client kubernetes.Interface
 }
 
-// NewKubernetesClient creates a new KubernetesClient
-func NewKubernetesClient(client kubernetes.Interface) *KubernetesClient {
-	return &KubernetesClient{
+// NewClient creates a new Client
+func NewClient(client kubernetes.Interface) *Client {
+	return &Client{
 		client: client,
 	}
 }
 
 // GetNodes retrieves all nodes from the cluster
-func (k *KubernetesClient) GetNodes() ([]v1.Node, error) {
+func (k *Client) GetNodes() ([]v1.Node, error) {
 	nodes, exists := cache.Get(nodesCacheKey)
 	if exists {
 		if v1Nodes, ok := nodes.([]v1.Node); ok {
@@ -68,7 +68,7 @@ func (k *KubernetesClient) GetNodes() ([]v1.Node, error) {
 }
 
 // GetPodsInNode retrieves all pods from a given node
-func (k *KubernetesClient) GetPodsInNode(node string) ([]v1.Pod, error) {
+func (k *Client) GetPodsInNode(node string) ([]v1.Pod, error) {
 	podList, err := k.client.CoreV1().Pods("").List(context.TODO(), metav1.ListOptions{
 		FieldSelector: fmt.Sprintf("spec.nodeName=%s", node),
 	})
@@ -81,7 +81,7 @@ func (k *KubernetesClient) GetPodsInNode(node string) ([]v1.Pod, error) {
 // GetNodeByAwsAutoScalingInstance gets the Kubernetes node matching an AWS AutoScaling instance
 // Because we cannot filter by spec.providerID, the entire list of nodes is fetched every time
 // this function is called
-func (k *KubernetesClient) GetNodeByAwsAutoScalingInstance(instance *autoscaling.Instance) (*v1.Node, error) {
+func (k *Client) GetNodeByAutoScalingInstance(instance *autoscaling.Instance) (*v1.Node, error) {
 	////For some reason, we can't filter by spec.providerID
 	//api := k.client.CoreV1().Nodes()
 	//nodeList, err := api.List(metav1.ListOptions{
@@ -104,7 +104,7 @@ func (k *KubernetesClient) GetNodeByAwsAutoScalingInstance(instance *autoscaling
 }
 
 // FilterNodeByAutoScalingInstance extracts the Kubernetes node belonging to a given AWS instance from a list of nodes
-func (k *KubernetesClient) FilterNodeByAutoScalingInstance(nodes []v1.Node, instance *autoscaling.Instance) (*v1.Node, error) {
+func (k *Client) FilterNodeByAutoScalingInstance(nodes []v1.Node, instance *autoscaling.Instance) (*v1.Node, error) {
 	providerId := fmt.Sprintf("aws:///%s/%s", aws.StringValue(instance.AvailabilityZone), aws.StringValue(instance.InstanceId))
 	for _, node := range nodes {
 		if node.Spec.ProviderID == providerId {
@@ -115,14 +115,14 @@ func (k *KubernetesClient) FilterNodeByAutoScalingInstance(nodes []v1.Node, inst
 }
 
 // UpdateNode updates a node
-func (k *KubernetesClient) UpdateNode(node *v1.Node) error {
+func (k *Client) UpdateNode(node *v1.Node) error {
 	api := k.client.CoreV1().Nodes()
 	_, err := api.Update(context.TODO(), node, metav1.UpdateOptions{})
 	return err
 }
 
 // Drain gracefully deletes all pods from a given node
-func (k *KubernetesClient) Drain(nodeName string, ignoreDaemonSets, deleteEmptyDirData bool) error {
+func (k *Client) Drain(nodeName string, ignoreDaemonSets, deleteEmptyDirData bool) error {
 	node, err := k.client.CoreV1().Nodes().Get(context.TODO(), nodeName, metav1.GetOptions{})
 	if err != nil {
 		return err

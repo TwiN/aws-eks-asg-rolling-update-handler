@@ -15,13 +15,13 @@ func TestCheckIfNodeHasEnoughResourcesToTransferAllPodsInNodes(t *testing.T) {
 	oldNode := k8stest.CreateTestNode("old-node", "us-west-2a", "i-034fa1dfbfd35f8bb", "0m", "0m")
 	newNode := k8stest.CreateTestNode("new-node-1", "us-west-2b", "i-07550830aef9e4179", "1000m", "1000Mi")
 	oldNodePod := k8stest.CreateTestPod("old-pod-1", oldNode.Name, "100m", "100Mi", false, v1.PodRunning)
-	mockKubernetesClient := k8stest.NewMockKubernetesClient([]v1.Node{oldNode, newNode}, []v1.Pod{oldNodePod})
+	mockClient := k8stest.NewMockClient([]v1.Node{oldNode, newNode}, []v1.Pod{oldNodePod})
 
-	hasEnoughResources := CheckIfNodeHasEnoughResourcesToTransferAllPodsInNodes(mockKubernetesClient, &oldNode, []*v1.Node{&newNode})
+	hasEnoughResources := CheckIfNodeHasEnoughResourcesToTransferAllPodsInNodes(mockClient, &oldNode, []*v1.Node{&newNode})
 	if !hasEnoughResources {
 		t.Error("should've had enough space in node")
 	}
-	if mockKubernetesClient.Counter["GetPodsInNode"] != 2 {
+	if mockClient.Counter["GetPodsInNode"] != 2 {
 		t.Error("GetPodInNode should've been called twice")
 	}
 }
@@ -31,13 +31,13 @@ func TestCheckIfNodeHasEnoughResourcesToTransferAllPodsInNodes_whenNotEnoughSpac
 	newNode := k8stest.CreateTestNode("new-node-1", "us-west-2c", "i-0b22d79604221412c", "1000m", "1000Mi")
 	oldNodePod := k8stest.CreateTestPod("old-pod-1", oldNode.Name, "200m", "200Mi", false, v1.PodRunning)
 	newNodePod := k8stest.CreateTestPod("new-pod-1", newNode.Name, "900m", "200Mi", false, v1.PodRunning)
-	mockKubernetesClient := k8stest.NewMockKubernetesClient([]v1.Node{oldNode, newNode}, []v1.Pod{oldNodePod, newNodePod})
+	mockClient := k8stest.NewMockClient([]v1.Node{oldNode, newNode}, []v1.Pod{oldNodePod, newNodePod})
 
-	hasEnoughResources := CheckIfNodeHasEnoughResourcesToTransferAllPodsInNodes(mockKubernetesClient, &oldNode, []*v1.Node{&newNode})
+	hasEnoughResources := CheckIfNodeHasEnoughResourcesToTransferAllPodsInNodes(mockClient, &oldNode, []*v1.Node{&newNode})
 	if hasEnoughResources {
 		t.Error("shouldn't have had enough space in node")
 	}
-	if mockKubernetesClient.Counter["GetPodsInNode"] != 2 {
+	if mockClient.Counter["GetPodsInNode"] != 2 {
 		t.Error("GetPodInNode should've been called twice")
 	}
 }
@@ -49,13 +49,13 @@ func TestCheckIfNodeHasEnoughResourcesToTransferAllPodsInNodes_withMultiplePods(
 	oldNodeSecondPod := k8stest.CreateTestPod("old-pod-2", oldNode.Name, "300m", "0", false, v1.PodRunning)
 	oldNodeThirdPod := k8stest.CreateTestPod("old-pod-3", oldNode.Name, "300m", "0", false, v1.PodRunning)
 	newNodePod := k8stest.CreateTestPod("new-pod-1", newNode.Name, "200m", "200Mi", false, v1.PodRunning)
-	mockKubernetesClient := k8stest.NewMockKubernetesClient([]v1.Node{oldNode, newNode}, []v1.Pod{oldNodeFirstPod, oldNodeSecondPod, oldNodeThirdPod, newNodePod})
+	mockClient := k8stest.NewMockClient([]v1.Node{oldNode, newNode}, []v1.Pod{oldNodeFirstPod, oldNodeSecondPod, oldNodeThirdPod, newNodePod})
 
-	hasEnoughResources := CheckIfNodeHasEnoughResourcesToTransferAllPodsInNodes(mockKubernetesClient, &oldNode, []*v1.Node{&newNode})
+	hasEnoughResources := CheckIfNodeHasEnoughResourcesToTransferAllPodsInNodes(mockClient, &oldNode, []*v1.Node{&newNode})
 	if hasEnoughResources {
 		t.Error("shouldn't have had enough space in node")
 	}
-	if mockKubernetesClient.Counter["GetPodsInNode"] != 2 {
+	if mockClient.Counter["GetPodsInNode"] != 2 {
 		t.Error("GetPodInNode should've been called twice")
 	}
 }
@@ -67,13 +67,13 @@ func TestCheckIfNodeHasEnoughResourcesToTransferAllPodsInNodes_withMultipleTarge
 	oldNodeFirstPod := k8stest.CreateTestPod("old-node-pod-1", oldNode.Name, "500m", "0", false, v1.PodRunning)
 	oldNodeSecondPod := k8stest.CreateTestPod("old-node-pod-2", oldNode.Name, "500m", "0", false, v1.PodRunning)
 	oldNodeThirdPod := k8stest.CreateTestPod("old-node-pod-3", oldNode.Name, "500m", "0", false, v1.PodRunning)
-	mockKubernetesClient := k8stest.NewMockKubernetesClient([]v1.Node{oldNode, firstNewNode, secondNewNode}, []v1.Pod{oldNodeFirstPod, oldNodeSecondPod, oldNodeThirdPod})
+	mockClient := k8stest.NewMockClient([]v1.Node{oldNode, firstNewNode, secondNewNode}, []v1.Pod{oldNodeFirstPod, oldNodeSecondPod, oldNodeThirdPod})
 
-	hasEnoughResources := CheckIfNodeHasEnoughResourcesToTransferAllPodsInNodes(mockKubernetesClient, &oldNode, []*v1.Node{&firstNewNode, &secondNewNode})
+	hasEnoughResources := CheckIfNodeHasEnoughResourcesToTransferAllPodsInNodes(mockClient, &oldNode, []*v1.Node{&firstNewNode, &secondNewNode})
 	if !hasEnoughResources {
 		t.Error("should've had enough space in node")
 	}
-	if mockKubernetesClient.Counter["GetPodsInNode"] != 3 {
+	if mockClient.Counter["GetPodsInNode"] != 3 {
 		t.Error("GetPodInNode should've been called thrice")
 	}
 }
@@ -87,13 +87,13 @@ func TestCheckIfNodeHasEnoughResourcesToTransferAllPodsInNodes_withPodsSpreadAcr
 	oldNodeFirstPod := k8stest.CreateTestPod("old-node-pod-1", oldNode.Name, "0", "500Mi", false, v1.PodRunning)
 	oldNodeSecondPod := k8stest.CreateTestPod("old-node-pod-2", oldNode.Name, "0", "500Mi", false, v1.PodRunning)
 	oldNodeThirdPod := k8stest.CreateTestPod("old-node-pod-3", oldNode.Name, "0", "500Mi", false, v1.PodRunning)
-	mockKubernetesClient := k8stest.NewMockKubernetesClient([]v1.Node{oldNode, firstNewNode, secondNewNode}, []v1.Pod{oldNodeFirstPod, oldNodeSecondPod, oldNodeThirdPod, firstNewNodePod, secondNewNodePod})
+	mockClient := k8stest.NewMockClient([]v1.Node{oldNode, firstNewNode, secondNewNode}, []v1.Pod{oldNodeFirstPod, oldNodeSecondPod, oldNodeThirdPod, firstNewNodePod, secondNewNodePod})
 
-	hasEnoughResources := CheckIfNodeHasEnoughResourcesToTransferAllPodsInNodes(mockKubernetesClient, &oldNode, []*v1.Node{&firstNewNode, &secondNewNode})
+	hasEnoughResources := CheckIfNodeHasEnoughResourcesToTransferAllPodsInNodes(mockClient, &oldNode, []*v1.Node{&firstNewNode, &secondNewNode})
 	if hasEnoughResources {
 		t.Error("shouldn't have had enough space in node")
 	}
-	if mockKubernetesClient.Counter["GetPodsInNode"] != 3 {
+	if mockClient.Counter["GetPodsInNode"] != 3 {
 		t.Error("GetPodInNode should've been called thrice")
 	}
 }
@@ -101,9 +101,9 @@ func TestCheckIfNodeHasEnoughResourcesToTransferAllPodsInNodes_withPodsSpreadAcr
 func TestCheckIfNodeHasEnoughResourcesToTransferAllPodsInNodes_withNoTargetNodes(t *testing.T) {
 	oldNode := k8stest.CreateTestNode("old-node", "us-west-2a", "i-034fa1dfbfd35f8bb", "0m", "0m")
 	oldNodePod := k8stest.CreateTestPod("old-node-pod-1", oldNode.Name, "500Mi", "500Mi", false, v1.PodRunning)
-	mockKubernetesClient := k8stest.NewMockKubernetesClient([]v1.Node{oldNode}, []v1.Pod{oldNodePod})
+	mockClient := k8stest.NewMockClient([]v1.Node{oldNode}, []v1.Pod{oldNodePod})
 
-	hasEnoughResources := CheckIfNodeHasEnoughResourcesToTransferAllPodsInNodes(mockKubernetesClient, &oldNode, []*v1.Node{})
+	hasEnoughResources := CheckIfNodeHasEnoughResourcesToTransferAllPodsInNodes(mockClient, &oldNode, []*v1.Node{})
 	if hasEnoughResources {
 		t.Error("there's no target nodes; there definitely shouldn't have been enough space")
 	}
@@ -112,9 +112,9 @@ func TestCheckIfNodeHasEnoughResourcesToTransferAllPodsInNodes_withNoTargetNodes
 func TestCheckIfNodeHasEnoughResourcesToTransferAllPodsInNodes_withNoTargetNodesButOldNodeOnlyHasPodsFromDaemonSets(t *testing.T) {
 	oldNode := k8stest.CreateTestNode("old-node", "us-west-2a", "i-034fa1dfbfd35f8bb", "0m", "0m")
 	oldNodePod := k8stest.CreateTestPod("old-node-pod-1", oldNode.Name, "500Mi", "500Mi", true, v1.PodRunning)
-	mockKubernetesClient := k8stest.NewMockKubernetesClient([]v1.Node{oldNode}, []v1.Pod{oldNodePod})
+	mockClient := k8stest.NewMockClient([]v1.Node{oldNode}, []v1.Pod{oldNodePod})
 
-	hasEnoughResources := CheckIfNodeHasEnoughResourcesToTransferAllPodsInNodes(mockKubernetesClient, &oldNode, []*v1.Node{})
+	hasEnoughResources := CheckIfNodeHasEnoughResourcesToTransferAllPodsInNodes(mockClient, &oldNode, []*v1.Node{})
 	if !hasEnoughResources {
 		t.Error("there's no target nodes, but the only pods in the old node are from daemon sets")
 	}

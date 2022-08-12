@@ -8,9 +8,9 @@ import (
 	fakekubernetes "k8s.io/client-go/kubernetes/fake"
 )
 
-func TestKubernetesClient_Drain(t *testing.T) {
+func TestClient_Drain(t *testing.T) {
 	fakeKubernetesClient := fakekubernetes.NewSimpleClientset(&v1.Node{ObjectMeta: metav1.ObjectMeta{Name: "default"}})
-	kc := NewKubernetesClient(fakeKubernetesClient)
+	kc := NewClient(fakeKubernetesClient)
 	err := kc.Drain("default", true, true)
 	if err != nil {
 		t.Errorf("Unexpected error: %v", err)

@@ -209,16 +209,19 @@ func TestHandleRollingUpgrade(t *testing.T) {
 	oldNode := k8stest.CreateTestNode("old-node-1", aws.StringValue(oldInstance.AvailabilityZone), aws.StringValue(oldInstance.InstanceId), "1000m", "1000Mi")
 	oldNodePod := k8stest.CreateTestPod("old-pod-1", oldNode.Name, "100m", "100Mi", false, v1.PodRunning)
 
-	mockKubernetesClient := k8stest.NewMockKubernetesClient([]v1.Node{oldNode}, []v1.Pod{oldNodePod})
+	mockClient := k8stest.NewMockClient([]v1.Node{oldNode}, []v1.Pod{oldNodePod})
 	mockEc2Service := cloudtest.NewMockEC2Service(nil)
 	mockAutoScalingService := cloudtest.NewMockAutoScalingService([]*autoscaling.Group{asg})
 
 	// First run (Node rollout process gets marked as started)
-	HandleRollingUpgrade(mockKubernetesClient, mockEc2Service, mockAutoScalingService, []*autoscaling.Group{asg})
-	if mockKubernetesClient.Counter["UpdateNode"] != 1 {
+	err := HandleRollingUpgrade(mockClient, mockEc2Service, mockAutoScalingService, []*autoscaling.Group{asg})
+	if err != nil {
+		t.Error("unexpected error:", err)
+	}
+	if mockClient.Counter["UpdateNode"] != 1 {
 		t.Error("Node should've been annotated, meaning that UpdateNode should've been called once")
 	}
-	oldNode = mockKubernetesClient.Nodes[oldNode.Name]
+	oldNode = mockClient.Nodes[oldNode.Name]
 	if _, ok := oldNode.GetAnnotations()[k8s.AnnotationRollingUpdateStartedTimestamp]; !ok {
 		t.Error("Node should've been annotated with", k8s.AnnotationRollingUpdateStartedTimestamp)
 	}
@@ -230,7 +233,10 @@ func TestHandleRollingUpgrade(t *testing.T) {
 	}
 
 	// Second run (ASG's desired capacity gets increased)
-	HandleRollingUpgrade(mockKubernetesClient, mockEc2Service, mockAutoScalingService, []*autoscaling.Group{asg})
+	err = HandleRollingUpgrade(mockClient, mockEc2Service, mockAutoScalingService, []*autoscaling.Group{asg})
+	if err != nil {
+		t.Error("unexpected error:", err)
+	}
 	if mockAutoScalingService.Counter["SetDesiredCapacity"] != 1 {
 		t.Error("ASG should've been increased because there's no updated nodes yet")
 	}
@@ -238,13 +244,16 @@ func TestHandleRollingUpgrade(t *testing.T) {
 	if aws.Int64Value(asg.DesiredCapacity) != 2 {
 		t.Error("The desired capacity of the ASG should've been increased to 2")
 	}
-	oldNode = mockKubernetesClient.Nodes[oldNode.Name]
+	oldNode = mockClient.Nodes[oldNode.Name]
 	if _, ok := oldNode.GetAnnotations()[k8s.AnnotationRollingUpdateDrainedTimestamp]; ok {
 		t.Error("Node shouldn't have been drained yet, therefore shouldn't have been annotated with", k8s.AnnotationRollingUpdateDrainedTimestamp)
 	}
 
 	// Third run (Nothing changed)
-	HandleRollingUpgrade(mockKubernetesClient, mockEc2Service, mockAutoScalingService, []*autoscaling.Group{asg})
+	err = HandleRollingUpgrade(mockClient, mockEc2Service, mockAutoScalingService, []*autoscaling.Group{asg})
+	if err != nil {
+		t.Error("unexpected error:", err)
+	}
 	if mockAutoScalingService.Counter["SetDesiredCapacity"] != 1 {
 		t.Error("Desired capacity shouldn't have been updated")
 	}
@@ -252,7 +261,7 @@ func TestHandleRollingUpgrade(t *testing.T) {
 	if aws.Int64Value(asg.DesiredCapacity) != 2 {
 		t.Error("The desired capacity of the ASG should've stayed at 2")
 	}
-	oldNode = mockKubernetesClient.Nodes[oldNode.Name]
+	oldNode = mockClient.Nodes[oldNode.Name]
 	if _, ok := oldNode.GetAnnotations()[k8s.AnnotationRollingUpdateDrainedTimestamp]; ok {
 		t.Error("Node shouldn't have been drained yet, therefore shouldn't have been annotated with", k8s.AnnotationRollingUpdateDrainedTimestamp)
 	}
@@ -260,19 +269,25 @@ func TestHandleRollingUpgrade(t *testing.T) {
 	// Fourth run (new instance has been registered to ASG, but is pending)
 	newInstance := cloudtest.CreateTestAutoScalingInstance("new-1", "v2", nil, "Pending")
 	asg.Instances = append(asg.Instances, newInstance)
-	HandleRollingUpgrade(mockKubernetesClient, mockEc2Service, mockAutoScalingService, []*autoscaling.Group{asg})
+	err = HandleRollingUpgrade(mockClient, mockEc2Service, mockAutoScalingService, []*autoscaling.Group{asg})
+	if err != nil {
+		t.Error("unexpected error:", err)
+	}
 	if mockAutoScalingService.Counter["SetDesiredCapacity"] != 1 {
 		t.Error("Desired capacity shouldn't have been updated")
 	}
-	oldNode = mockKubernetesClient.Nodes[oldNode.Name]
+	oldNode = mockClient.Nodes[oldNode.Name]
 	if _, ok := oldNode.GetAnnotations()[k8s.AnnotationRollingUpdateDrainedTimestamp]; ok {
 		t.Error("Node shouldn't have been drained yet, therefore shouldn't have been annotated with", k8s.AnnotationRollingUpdateDrainedTimestamp)
 	}
 
-	// Fifth run (new instance is now InService, but node has still not joined cluster (GetNodeByAwsAutoScalingInstance should return not found))
+	// Fifth run (new instance is now InService, but node has still not joined cluster (GetNodeByAutoScalingInstance should return not found))
 	newInstance.SetLifecycleState("InService")
-	HandleRollingUpgrade(mockKubernetesClient, mockEc2Service, mockAutoScalingService, []*autoscaling.Group{asg})
-	oldNode = mockKubernetesClient.Nodes[oldNode.Name]
+	err = HandleRollingUpgrade(mockClient, mockEc2Service, mockAutoScalingService, []*autoscaling.Group{asg})
+	if err != nil {
+		t.Error("unexpected error:", err)
+	}
+	oldNode = mockClient.Nodes[oldNode.Name]
 	if _, ok := oldNode.GetAnnotations()[k8s.AnnotationRollingUpdateDrainedTimestamp]; ok {
 		t.Error("Node shouldn't have been drained yet, therefore shouldn't have been annotated with", k8s.AnnotationRollingUpdateDrainedTimestamp)
 	}
@@ -280,19 +295,25 @@ func TestHandleRollingUpgrade(t *testing.T) {
 	// Sixth run (new instance has joined the cluster, but Kubelet isn't ready to accept pods yet)
 	newNode := k8stest.CreateTestNode("new-node-1", aws.StringValue(newInstance.AvailabilityZone), aws.StringValue(newInstance.InstanceId), "1000m", "1000Mi")
 	newNode.Status.Conditions = []v1.NodeCondition{{Type: v1.NodeReady, Status: v1.ConditionFalse}}
-	mockKubernetesClient.Nodes[newNode.Name] = newNode
-	HandleRollingUpgrade(mockKubernetesClient, mockEc2Service, mockAutoScalingService, []*autoscaling.Group{asg})
-	oldNode = mockKubernetesClient.Nodes[oldNode.Name]
+	mockClient.Nodes[newNode.Name] = newNode
+	err = HandleRollingUpgrade(mockClient, mockEc2Service, mockAutoScalingService, []*autoscaling.Group{asg})
+	if err != nil {
+		t.Error("unexpected error:", err)
+	}
+	oldNode = mockClient.Nodes[oldNode.Name]
 	if _, ok := oldNode.GetAnnotations()[k8s.AnnotationRollingUpdateDrainedTimestamp]; ok {
 		t.Error("Node shouldn't have been drained yet, therefore shouldn't have been annotated with", k8s.AnnotationRollingUpdateDrainedTimestamp)
 	}
 
 	// Seventh run (Kubelet is ready to accept new pods. Old node gets drained and terminated)
-	newNode = mockKubernetesClient.Nodes[newNode.Name]
+	newNode = mockClient.Nodes[newNode.Name]
 	newNode.Status.Conditions = []v1.NodeCondition{{Type: v1.NodeReady, Status: v1.ConditionTrue}}
-	mockKubernetesClient.Nodes[newNode.Name] = newNode
-	HandleRollingUpgrade(mockKubernetesClient, mockEc2Service, mockAutoScalingService, []*autoscaling.Group{asg})
-	oldNode = mockKubernetesClient.Nodes[oldNode.Name]
+	mockClient.Nodes[newNode.Name] = newNode
+	err = HandleRollingUpgrade(mockClient, mockEc2Service, mockAutoScalingService, []*autoscaling.Group{asg})
+	if err != nil {
+		t.Error("unexpected error:", err)
+	}
+	oldNode = mockClient.Nodes[oldNode.Name]
 	if _, ok := oldNode.GetAnnotations()[k8s.AnnotationRollingUpdateDrainedTimestamp]; !ok {
 		t.Error("Node should've been drained")
 	}
@@ -324,16 +345,16 @@ func TestHandleRollingUpgrade_withLaunchTemplate(t *testing.T) {
 	oldNode := k8stest.CreateTestNode("old-node-1", aws.StringValue(oldInstance.AvailabilityZone), aws.StringValue(oldInstance.InstanceId), "1000m", "1000Mi")
 	oldNodePod := k8stest.CreateTestPod("old-pod-1", oldNode.Name, "100m", "100Mi", false, v1.PodRunning)
 
-	mockKubernetesClient := k8stest.NewMockKubernetesClient([]v1.Node{oldNode}, []v1.Pod{oldNodePod})
+	mockClient := k8stest.NewMockClient([]v1.Node{oldNode}, []v1.Pod{oldNodePod})
 	mockEc2Service := cloudtest.NewMockEC2Service([]*ec2.LaunchTemplate{lt})
 	mockAutoScalingService := cloudtest.NewMockAutoScalingService([]*autoscaling.Group{asg})
 
 	// First run (Node rollout process gets marked as started)
-	HandleRollingUpgrade(mockKubernetesClient, mockEc2Service, mockAutoScalingService, []*autoscaling.Group{asg})
-	if mockKubernetesClient.Counter["UpdateNode"] != 1 {
+	HandleRollingUpgrade(mockClient, mockEc2Service, mockAutoScalingService, []*autoscaling.Group{asg})
+	if mockClient.Counter["UpdateNode"] != 1 {
 		t.Error("Node should've been annotated, meaning that UpdateNode should've been called once")
 	}
-	oldNode = mockKubernetesClient.Nodes[oldNode.Name]
+	oldNode = mockClient.Nodes[oldNode.Name]
 	if _, ok := oldNode.GetAnnotations()[k8s.AnnotationRollingUpdateStartedTimestamp]; !ok {
 		t.Error("Node should've been annotated with", k8s.AnnotationRollingUpdateStartedTimestamp)
 	}
@@ -345,7 +366,7 @@ func TestHandleRollingUpgrade_withLaunchTemplate(t *testing.T) {
 	}
 
 	// Second run (ASG's desired capacity gets increased)
-	HandleRollingUpgrade(mockKubernetesClient, mockEc2Service, mockAutoScalingService, []*autoscaling.Group{asg})
+	HandleRollingUpgrade(mockClient, mockEc2Service, mockAutoScalingService, []*autoscaling.Group{asg})
 	if mockAutoScalingService.Counter["SetDesiredCapacity"] != 1 {
 		t.Error("ASG should've been increased because there's no updated nodes yet")
 	}
@@ -353,13 +374,13 @@ func TestHandleRollingUpgrade_withLaunchTemplate(t *testing.T) {
 	if aws.Int64Value(asg.DesiredCapacity) != 2 {
 		t.Error("The desired capacity of the ASG should've been increased to 2")
 	}
-	oldNode = mockKubernetesClient.Nodes[oldNode.Name]
+	oldNode = mockClient.Nodes[oldNode.Name]
 	if _, ok := oldNode.GetAnnotations()[k8s.AnnotationRollingUpdateDrainedTimestamp]; ok {
 		t.Error("Node shouldn't have been drained yet, therefore shouldn't have been annotated with", k8s.AnnotationRollingUpdateDrainedTimestamp)
 	}
 
 	// Third run (Nothing changed)
-	HandleRollingUpgrade(mockKubernetesClient, mockEc2Service, mockAutoScalingService, []*autoscaling.Group{asg})
+	HandleRollingUpgrade(mockClient, mockEc2Service, mockAutoScalingService, []*autoscaling.Group{asg})
 	if mockAutoScalingService.Counter["SetDesiredCapacity"] != 1 {
 		t.Error("Desired capacity shouldn't have been updated")
 	}
@@ -367,7 +388,7 @@ func TestHandleRollingUpgrade_withLaunchTemplate(t *testing.T) {
 	if aws.Int64Value(asg.DesiredCapacity) != 2 {
 		t.Error("The desired capacity of the ASG should've stayed at 2")
 	}
-	oldNode = mockKubernetesClient.Nodes[oldNode.Name]
+	oldNode = mockClient.Nodes[oldNode.Name]
 	if _, ok := oldNode.GetAnnotations()[k8s.AnnotationRollingUpdateDrainedTimestamp]; ok {
 		t.Error("Node shouldn't have been drained yet, therefore shouldn't have been annotated with", k8s.AnnotationRollingUpdateDrainedTimestamp)
 	}
@@ -375,19 +396,19 @@ func TestHandleRollingUpgrade_withLaunchTemplate(t *testing.T) {
 	// Fourth run (new instance has been registered to ASG, but is pending)
 	newInstance := cloudtest.CreateTestAutoScalingInstance("new-1", "", newLaunchTemplateSpecification, "Pending")
 	asg.Instances = append(asg.Instances, newInstance)
-	HandleRollingUpgrade(mockKubernetesClient, mockEc2Service, mockAutoScalingService, []*autoscaling.Group{asg})
+	HandleRollingUpgrade(mockClient, mockEc2Service, mockAutoScalingService, []*autoscaling.Group{asg})
 	if mockAutoScalingService.Counter["SetDesiredCapacity"] != 1 {
 		t.Error("Desired capacity shouldn't have been updated")
 	}
-	oldNode = mockKubernetesClient.Nodes[oldNode.Name]
+	oldNode = mockClient.Nodes[oldNode.Name]
 	if _, ok := oldNode.GetAnnotations()[k8s.AnnotationRollingUpdateDrainedTimestamp]; ok {
 		t.Error("Node shouldn't have been drained yet, therefore shouldn't have been annotated with", k8s.AnnotationRollingUpdateDrainedTimestamp)
 	}
 
-	// Fifth run (new instance is now InService, but node has still not joined cluster (GetNodeByAwsAutoScalingInstance should return not found))
+	// Fifth run (new instance is now InService, but node has still not joined cluster (GetNodeByAutoScalingInstance should return not found))
 	newInstance.SetLifecycleState("InService")
-	HandleRollingUpgrade(mockKubernetesClient, mockEc2Service, mockAutoScalingService, []*autoscaling.Group{asg})
-	oldNode = mockKubernetesClient.Nodes[oldNode.Name]
+	HandleRollingUpgrade(mockClient, mockEc2Service, mockAutoScalingService, []*autoscaling.Group{asg})
+	oldNode = mockClient.Nodes[oldNode.Name]
 	if _, ok := oldNode.GetAnnotations()[k8s.AnnotationRollingUpdateDrainedTimestamp]; ok {
 		t.Error("Node shouldn't have been drained yet, therefore shouldn't have been annotated with", k8s.AnnotationRollingUpdateDrainedTimestamp)
 	}
@@ -395,19 +416,19 @@ func TestHandleRollingUpgrade_withLaunchTemplate(t *testing.T) {
 	// Sixth run (new instance has joined the cluster, but Kubelet isn't ready to accept pods yet)
 	newNode := k8stest.CreateTestNode("new-node-1", aws.StringValue(newInstance.AvailabilityZone), aws.StringValue(newInstance.InstanceId), "1000m", "1000Mi")
 	newNode.Status.Conditions = []v1.NodeCondition{{Type: v1.NodeReady, Status: v1.ConditionFalse}}
-	mockKubernetesClient.Nodes[newNode.Name] = newNode
-	HandleRollingUpgrade(mockKubernetesClient, mockEc2Service, mockAutoScalingService, []*autoscaling.Group{asg})
-	oldNode = mockKubernetesClient.Nodes[oldNode.Name]
+	mockClient.Nodes[newNode.Name] = newNode
+	HandleRollingUpgrade(mockClient, mockEc2Service, mockAutoScalingService, []*autoscaling.Group{asg})
+	oldNode = mockClient.Nodes[oldNode.Name]
 	if _, ok := oldNode.GetAnnotations()[k8s.AnnotationRollingUpdateDrainedTimestamp]; ok {
 		t.Error("Node shouldn't have been drained yet, therefore shouldn't have been annotated with", k8s.AnnotationRollingUpdateDrainedTimestamp)
 	}
 
 	// Seventh run (Kubelet is ready to accept new pods. Old node gets drained and terminated)
-	newNode = mockKubernetesClient.Nodes[newNode.Name]
+	newNode = mockClient.Nodes[newNode.Name]
 	newNode.Status.Conditions = []v1.NodeCondition{{Type: v1.NodeReady, Status: v1.ConditionTrue}}
-	mockKubernetesClient.Nodes[newNode.Name] = newNode
-	HandleRollingUpgrade(mockKubernetesClient, mockEc2Service, mockAutoScalingService, []*autoscaling.Group{asg})
-	oldNode = mockKubernetesClient.Nodes[oldNode.Name]
+	mockClient.Nodes[newNode.Name] = newNode
+	HandleRollingUpgrade(mockClient, mockEc2Service, mockAutoScalingService, []*autoscaling.Group{asg})
+	oldNode = mockClient.Nodes[oldNode.Name]
 	if _, ok := oldNode.GetAnnotations()[k8s.AnnotationRollingUpdateDrainedTimestamp]; !ok {
 		t.Error("Node should've been drained")
 	}
@@ -433,13 +454,13 @@ func TestHandleRollingUpgrade_withLaunchTemplateWhenLaunchTemplateDidNotUpdate(t
 
 	oldNode := k8stest.CreateTestNode("old-node-1", aws.StringValue(oldInstance.AvailabilityZone), aws.StringValue(oldInstance.InstanceId), "1000m", "1000Mi")
 
-	mockKubernetesClient := k8stest.NewMockKubernetesClient([]v1.Node{oldNode}, []v1.Pod{})
+	mockClient := k8stest.NewMockClient([]v1.Node{oldNode}, []v1.Pod{})
 	mockEc2Service := cloudtest.NewMockEC2Service([]*ec2.LaunchTemplate{lt})
 	mockAutoScalingService := cloudtest.NewMockAutoScalingService([]*autoscaling.Group{asg})
 
 	// First run (No changes, no updates)
-	HandleRollingUpgrade(mockKubernetesClient, mockEc2Service, mockAutoScalingService, []*autoscaling.Group{asg})
-	if mockKubernetesClient.Counter["UpdateNode"] != 0 {
+	HandleRollingUpgrade(mockClient, mockEc2Service, mockAutoScalingService, []*autoscaling.Group{asg})
+	if mockClient.Counter["UpdateNode"] != 0 {
 		t.Error("The LT hasn't been updated, therefore nothing should've changed")
 	}
 }
@@ -456,16 +477,16 @@ func TestHandleRollingUpgrade_withEnoughPodsToRequireTwoNewNodes(t *testing.T) {
 	// This pod should be ignored, because the pod.Status.Phase is v1.PodFailed
 	oldNodeFifthPod := k8stest.CreateTestPod("old-pod-5-evicted", oldNode.Name, "99999m", "99999Mi", false, v1.PodFailed)
 
-	mockKubernetesClient := k8stest.NewMockKubernetesClient([]v1.Node{oldNode}, []v1.Pod{oldNodeFirstPod, oldNodeSecondPod, oldNodeThirdPod, oldNodeFourthPod, oldNodeFifthPod})
+	mockClient := k8stest.NewMockClient([]v1.Node{oldNode}, []v1.Pod{oldNodeFirstPod, oldNodeSecondPod, oldNodeThirdPod, oldNodeFourthPod, oldNodeFifthPod})
 	mockEc2Service := cloudtest.NewMockEC2Service(nil)
 	mockAutoScalingService := cloudtest.NewMockAutoScalingService([]*autoscaling.Group{asg})
 
 	// First run (Node rollout process gets marked as started)
-	HandleRollingUpgrade(mockKubernetesClient, mockEc2Service, mockAutoScalingService, []*autoscaling.Group{asg})
-	if mockKubernetesClient.Counter["UpdateNode"] != 1 {
+	HandleRollingUpgrade(mockClient, mockEc2Service, mockAutoScalingService, []*autoscaling.Group{asg})
+	if mockClient.Counter["UpdateNode"] != 1 {
 		t.Error("Node should've been annotated, meaning that UpdateNode should've been called once")
 	}
-	oldNode = mockKubernetesClient.Nodes[oldNode.Name]
+	oldNode = mockClient.Nodes[oldNode.Name]
 	if _, ok := oldNode.GetAnnotations()[k8s.AnnotationRollingUpdateStartedTimestamp]; !ok {
 		t.Error("Node should've been annotated with", k8s.AnnotationRollingUpdateStartedTimestamp)
 	}
@@ -477,7 +498,7 @@ func TestHandleRollingUpgrade_withEnoughPodsToRequireTwoNewNodes(t *testing.T) {
 	}
 
 	// Second run (ASG's desired capacity gets increased)
-	HandleRollingUpgrade(mockKubernetesClient, mockEc2Service, mockAutoScalingService, []*autoscaling.Group{asg})
+	HandleRollingUpgrade(mockClient, mockEc2Service, mockAutoScalingService, []*autoscaling.Group{asg})
 	if mockAutoScalingService.Counter["SetDesiredCapacity"] != 1 {
 		t.Error("ASG should've been increased because there's no updated nodes yet")
 	}
@@ -485,13 +506,13 @@ func TestHandleRollingUpgrade_withEnoughPodsToRequireTwoNewNodes(t *testing.T) {
 	if aws.Int64Value(asg.DesiredCapacity) != 2 {
 		t.Error("The desired capacity of the ASG should've been increased to 2")
 	}
-	oldNode = mockKubernetesClient.Nodes[oldNode.Name]
+	oldNode = mockClient.Nodes[oldNode.Name]
 	if _, ok := oldNode.GetAnnotations()[k8s.AnnotationRollingUpdateDrainedTimestamp]; ok {
 		t.Error("Node shouldn't have been drained yet, therefore shouldn't have been annotated with", k8s.AnnotationRollingUpdateDrainedTimestamp)
 	}
 
 	// Third run (Nothing changed)
-	HandleRollingUpgrade(mockKubernetesClient, mockEc2Service, mockAutoScalingService, []*autoscaling.Group{asg})
+	HandleRollingUpgrade(mockClient, mockEc2Service, mockAutoScalingService, []*autoscaling.Group{asg})
 	if mockAutoScalingService.Counter["SetDesiredCapacity"] != 1 {
 		t.Error("Desired capacity shouldn't have been updated")
 	}
@@ -499,7 +520,7 @@ func TestHandleRollingUpgrade_withEnoughPodsToRequireTwoNewNodes(t *testing.T) {
 	if aws.Int64Value(asg.DesiredCapacity) != 2 {
 		t.Error("The desired capacity of the ASG should've stayed at 2")
 	}
-	oldNode = mockKubernetesClient.Nodes[oldNode.Name]
+	oldNode = mockClient.Nodes[oldNode.Name]
 	if _, ok := oldNode.GetAnnotations()[k8s.AnnotationRollingUpdateDrainedTimestamp]; ok {
 		t.Error("Node shouldn't have been drained yet, therefore shouldn't have been annotated with", k8s.AnnotationRollingUpdateDrainedTimestamp)
 	}
@@ -507,19 +528,19 @@ func TestHandleRollingUpgrade_withEnoughPodsToRequireTwoNewNodes(t *testing.T) {
 	// Fourth run (new instance has been registered to ASG, but is pending)
 	newInstance := cloudtest.CreateTestAutoScalingInstance("new-1", "v2", nil, "Pending")
 	asg.Instances = append(asg.Instances, newInstance)
-	HandleRollingUpgrade(mockKubernetesClient, mockEc2Service, mockAutoScalingService, []*autoscaling.Group{asg})
+	HandleRollingUpgrade(mockClient, mockEc2Service, mockAutoScalingService, []*autoscaling.Group{asg})
 	if mockAutoScalingService.Counter["SetDesiredCapacity"] != 1 {
 		t.Error("Desired capacity shouldn't have been updated")
 	}
-	oldNode = mockKubernetesClient.Nodes[oldNode.Name]
+	oldNode = mockClient.Nodes[oldNode.Name]
 	if _, ok := oldNode.GetAnnotations()[k8s.AnnotationRollingUpdateDrainedTimestamp]; ok {
 		t.Error("Node shouldn't have been drained yet, therefore shouldn't have been annotated with", k8s.AnnotationRollingUpdateDrainedTimestamp)
 	}
 
-	// Fifth run (new instance is now InService, but node has still not joined cluster (GetNodeByAwsAutoScalingInstance should return not found))
+	// Fifth run (new instance is now InService, but node has still not joined cluster (GetNodeByAutoScalingInstance should return not found))
 	newInstance.SetLifecycleState("InService")
-	HandleRollingUpgrade(mockKubernetesClient, mockEc2Service, mockAutoScalingService, []*autoscaling.Group{asg})
-	oldNode = mockKubernetesClient.Nodes[oldNode.Name]
+	HandleRollingUpgrade(mockClient, mockEc2Service, mockAutoScalingService, []*autoscaling.Group{asg})
+	oldNode = mockClient.Nodes[oldNode.Name]
 	if _, ok := oldNode.GetAnnotations()[k8s.AnnotationRollingUpdateDrainedTimestamp]; ok {
 		t.Error("Node shouldn't have been drained yet, therefore shouldn't have been annotated with", k8s.AnnotationRollingUpdateDrainedTimestamp)
 	}
@@ -527,25 +548,25 @@ func TestHandleRollingUpgrade_withEnoughPodsToRequireTwoNewNodes(t *testing.T) {
 	// Sixth run (new instance has joined the cluster, but Kubelet isn't ready to accept pods yet)
 	newNode := k8stest.CreateTestNode("new-node-1", aws.StringValue(newInstance.AvailabilityZone), aws.StringValue(newInstance.InstanceId), "1000m", "1000Mi")
 	newNode.Status.Conditions = []v1.NodeCondition{{Type: v1.NodeReady, Status: v1.ConditionFalse}}
-	mockKubernetesClient.Nodes[newNode.Name] = newNode
-	HandleRollingUpgrade(mockKubernetesClient, mockEc2Service, mockAutoScalingService, []*autoscaling.Group{asg})
-	oldNode = mockKubernetesClient.Nodes[oldNode.Name]
+	mockClient.Nodes[newNode.Name] = newNode
+	HandleRollingUpgrade(mockClient, mockEc2Service, mockAutoScalingService, []*autoscaling.Group{asg})
+	oldNode = mockClient.Nodes[oldNode.Name]
 	if _, ok := oldNode.GetAnnotations()[k8s.AnnotationRollingUpdateDrainedTimestamp]; ok {
 		t.Error("Node shouldn't have been drained yet, therefore shouldn't have been annotated with", k8s.AnnotationRollingUpdateDrainedTimestamp)
 	}
 
 	// Seventh run (Kubelet is ready to accept new pods)
-	newNode = mockKubernetesClient.Nodes[newNode.Name]
+	newNode = mockClient.Nodes[newNode.Name]
 	newNode.Status.Conditions = []v1.NodeCondition{{Type: v1.NodeReady, Status: v1.ConditionTrue}}
-	mockKubernetesClient.Nodes[newNode.Name] = newNode
-	HandleRollingUpgrade(mockKubernetesClient, mockEc2Service, mockAutoScalingService, []*autoscaling.Group{asg})
-	oldNode = mockKubernetesClient.Nodes[oldNode.Name]
+	mockClient.Nodes[newNode.Name] = newNode
+	HandleRollingUpgrade(mockClient, mockEc2Service, mockAutoScalingService, []*autoscaling.Group{asg})
+	oldNode = mockClient.Nodes[oldNode.Name]
 	if _, ok := oldNode.GetAnnotations()[k8s.AnnotationRollingUpdateDrainedTimestamp]; ok {
 		t.Error("Node shouldn't have been drained yet, therefore shouldn't have been annotated with", k8s.AnnotationRollingUpdateDrainedTimestamp)
 	}
 
 	// Eight run (ASG's desired capacity gets increased)
-	HandleRollingUpgrade(mockKubernetesClient, mockEc2Service, mockAutoScalingService, []*autoscaling.Group{asg})
+	HandleRollingUpgrade(mockClient, mockEc2Service, mockAutoScalingService, []*autoscaling.Group{asg})
 	if mockAutoScalingService.Counter["SetDesiredCapacity"] != 2 {
 		t.Error("ASG should've been increased again")
 	}
@@ -553,7 +574,7 @@ func TestHandleRollingUpgrade_withEnoughPodsToRequireTwoNewNodes(t *testing.T) {
 	if aws.Int64Value(asg.DesiredCapacity) != 3 {
 		t.Error("The desired capacity of the ASG should've been increased to 3")
 	}
-	oldNode = mockKubernetesClient.Nodes[oldNode.Name]
+	oldNode = mockClient.Nodes[oldNode.Name]
 	if _, ok := oldNode.GetAnnotations()[k8s.AnnotationRollingUpdateDrainedTimestamp]; ok {
 		t.Error("Node shouldn't have been drained yet, therefore shouldn't have been annotated with", k8s.AnnotationRollingUpdateDrainedTimestamp)
 	}
@@ -563,9 +584,9 @@ func TestHandleRollingUpgrade_withEnoughPodsToRequireTwoNewNodes(t *testing.T) {
 	asg.Instances = append(asg.Instances, newSecondInstance)
 	newSecondNode := k8stest.CreateTestNode("new-node-2", aws.StringValue(newSecondInstance.AvailabilityZone), aws.StringValue(newSecondInstance.InstanceId), "1000m", "1000Mi")
 	newSecondNode.Status.Conditions = []v1.NodeCondition{{Type: v1.NodeReady, Status: v1.ConditionTrue}}
-	mockKubernetesClient.Nodes[newSecondNode.Name] = newSecondNode
-	HandleRollingUpgrade(mockKubernetesClient, mockEc2Service, mockAutoScalingService, []*autoscaling.Group{asg})
-	oldNode = mockKubernetesClient.Nodes[oldNode.Name]
+	mockClient.Nodes[newSecondNode.Name] = newSecondNode
+	HandleRollingUpgrade(mockClient, mockEc2Service, mockAutoScalingService, []*autoscaling.Group{asg})
+	oldNode = mockClient.Nodes[oldNode.Name]
 	if _, ok := oldNode.GetAnnotations()[k8s.AnnotationRollingUpdateDrainedTimestamp]; !ok {
 		t.Error("Node should've been drained")
 	}
@@ -601,13 +622,13 @@ func TestHandleRollingUpgrade_withMixedInstancePolicyWhenOneOfTheInstanceTypesOv
 
 	oldNode := k8stest.CreateTestNode("old-node-1", aws.StringValue(oldInstance.AvailabilityZone), aws.StringValue(oldInstance.InstanceId), "1000m", "1000Mi")
 
-	mockKubernetesClient := k8stest.NewMockKubernetesClient([]v1.Node{oldNode}, []v1.Pod{})
+	mockClient := k8stest.NewMockClient([]v1.Node{oldNode}, []v1.Pod{})
 	mockEc2Service := cloudtest.NewMockEC2Service([]*ec2.LaunchTemplate{lt})
 	mockAutoScalingService := cloudtest.NewMockAutoScalingService([]*autoscaling.Group{asg})
 
 	// First run (Nothing changed)
-	HandleRollingUpgrade(mockKubernetesClient, mockEc2Service, mockAutoScalingService, []*autoscaling.Group{asg})
-	if mockKubernetesClient.Counter["UpdateNode"] != 0 {
+	HandleRollingUpgrade(mockClient, mockEc2Service, mockAutoScalingService, []*autoscaling.Group{asg})
+	if mockClient.Counter["UpdateNode"] != 0 {
 		t.Error("Nothing should've changed")
 	}
 
@@ -619,8 +640,8 @@ func TestHandleRollingUpgrade_withMixedInstancePolicyWhenOneOfTheInstanceTypesOv
 	})
 
 	// Second run
-	HandleRollingUpgrade(mockKubernetesClient, mockEc2Service, mockAutoScalingService, []*autoscaling.Group{asg})
-	if mockKubernetesClient.Counter["UpdateNode"] != 1 {
+	HandleRollingUpgrade(mockClient, mockEc2Service, mockAutoScalingService, []*autoscaling.Group{asg})
+	if mockClient.Counter["UpdateNode"] != 1 {
 		t.Error("The old instance's instance type is no longer part of the ASG's MixedInstancePolicy's LaunchTemplate overrides, therefore, it is outdated and should've been annotated")
 	}
 }

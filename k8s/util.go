@@ -16,14 +16,14 @@ import (
 // while the latter is definitely possible, it would slow down the process by quite a bit. In a way, this is
 // the beauty of co-existing with the cluster autoscaler; an extra node will be spun up to handle the leftovers,
 // if any.
-func CheckIfNodeHasEnoughResourcesToTransferAllPodsInNodes(kubernetesClient KubernetesClientApi, oldNode *v1.Node, targetNodes []*v1.Node) bool {
-	totalAvailableTargetCpu := int64(0)
+func CheckIfNodeHasEnoughResourcesToTransferAllPodsInNodes(client ClientAPI, oldNode *v1.Node, targetNodes []*v1.Node) bool {
+	totalAvailableTargetCPU := int64(0)
 	totalAvailableTargetMemory := int64(0)
 	// Get resources available in target nodes
 	for _, targetNode := range targetNodes {
-		availableTargetCpu := targetNode.Status.Allocatable.Cpu().MilliValue()
+		availableTargetCPU := targetNode.Status.Allocatable.Cpu().MilliValue()
 		availableTargetMemory := targetNode.Status.Allocatable.Memory().MilliValue()
-		podsInNode, err := kubernetesClient.GetPodsInNode(targetNode.Name)
+		podsInNode, err := client.GetPodsInNode(targetNode.Name)
 		if err != nil {
 			continue
 		}
@@ -35,7 +35,7 @@ func CheckIfNodeHasEnoughResourcesToTransferAllPodsInNodes(kubernetesClient Kube
 			for _, container := range podInNode.Spec.Containers {
 				if container.Resources.Requests.Cpu() != nil {
 					// Subtract the cpu request of the pod from the node's total allocatable cpu
-					availableTargetCpu -= container.Resources.Requests.Cpu().MilliValue()
+					availableTargetCPU -= container.Resources.Requests.Cpu().MilliValue()
 				}
 				if container.Resources.Requests.Memory() != nil {
 					// Subtract the memory request of the pod from the node's total allocatable memory
@@ -43,13 +43,13 @@ func CheckIfNodeHasEnoughResourcesToTransferAllPodsInNodes(kubernetesClient Kube
 				}
 			}
 		}
-		totalAvailableTargetCpu += availableTargetCpu
+		totalAvailableTargetCPU += availableTargetCPU
 		totalAvailableTargetMemory += availableTargetMemory
 	}
 	cpuNeeded := int64(0)
 	memoryNeeded := int64(0)
 	// Get resources requested in old node
-	podsInNode, err := kubernetesClient.GetPodsInNode(oldNode.Name)
+	podsInNode, err := client.GetPodsInNode(oldNode.Name)
 	if err != nil {
 		log.Printf("Unable to determine resources needed for old node, assuming that enough resources are available")
 		return true
@@ -81,14 +81,14 @@ func CheckIfNodeHasEnoughResourcesToTransferAllPodsInNodes(kubernetesClient Kube
 			}
 		}
 	}
-	leftOverCpu := totalAvailableTargetCpu - cpuNeeded
+	leftOverCPU := totalAvailableTargetCPU - cpuNeeded
 	leftOverMemory := totalAvailableTargetMemory - memoryNeeded
-	return leftOverCpu >= 0 && leftOverMemory >= 0
+	return leftOverCPU >= 0 && leftOverMemory >= 0
 }
 
-// AnnotateNodeByAwsAutoScalingInstance adds an annotation to the Kubernetes node represented by a given AWS instance
-func AnnotateNodeByAwsAutoScalingInstance(kubernetesClient KubernetesClientApi, instance *autoscaling.Instance, key, value string) error {
-	node, err := kubernetesClient.GetNodeByAwsAutoScalingInstance(instance)
+// AnnotateNodeByAutoScalingInstance adds an annotation to the Kubernetes node represented by a given AWS instance
+func AnnotateNodeByAutoScalingInstance(client ClientAPI, instance *autoscaling.Instance, key, value string) error {
+	node, err := client.GetNodeByAutoScalingInstance(instance)
 	if err != nil {
 		return err
 	}
@@ -96,7 +96,7 @@ func AnnotateNodeByAwsAutoScalingInstance(kubernetesClient KubernetesClientApi, 
 	if currentValue := annotations[key]; currentValue != value {
 		annotations[key] = value
 		node.SetAnnotations(annotations)
-		err = kubernetesClient.UpdateNode(node)
+		err = client.UpdateNode(node)
 		if err != nil {
 			return err
 		}

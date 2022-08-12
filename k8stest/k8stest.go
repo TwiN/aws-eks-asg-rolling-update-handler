@@ -13,14 +13,14 @@ import (
 
 // TODO: replace this by Kubernetes' official fake client (k8s.io/client-go/kubernetes/fake)
 
-type MockKubernetesClient struct {
+type MockClient struct {
 	Counter map[string]int64
 	Nodes   map[string]v1.Node
 	Pods    map[string]v1.Pod
 }
 
-func NewMockKubernetesClient(nodes []v1.Node, pods []v1.Pod) *MockKubernetesClient {
-	client := &MockKubernetesClient{
+func NewMockClient(nodes []v1.Node, pods []v1.Pod) *MockClient {
+	client := &MockClient{
 		Counter: make(map[string]int64),
 		Nodes:   make(map[string]v1.Node),
 		Pods:    make(map[string]v1.Pod),
@@ -34,7 +34,7 @@ func NewMockKubernetesClient(nodes []v1.Node, pods []v1.Pod) *MockKubernetesClie
 	return client
 }
 
-func (mock *MockKubernetesClient) GetNodes() ([]v1.Node, error) {
+func (mock *MockClient) GetNodes() ([]v1.Node, error) {
 	mock.Counter["GetNodes"]++
 	var nodes []v1.Node
 	for _, node := range mock.Nodes {
@@ -43,7 +43,7 @@ func (mock *MockKubernetesClient) GetNodes() ([]v1.Node, error) {
 	return nodes, nil
 }
 
-func (mock *MockKubernetesClient) GetPodsInNode(node string) ([]v1.Pod, error) {
+func (mock *MockClient) GetPodsInNode(node string) ([]v1.Pod, error) {
 	mock.Counter["GetPodsInNode"]++
 	var pods []v1.Pod
 	for _, pod := range mock.Pods {
@@ -54,13 +54,13 @@ func (mock *MockKubernetesClient) GetPodsInNode(node string) ([]v1.Pod, error) {
 	return pods, nil
 }
 
-func (mock *MockKubernetesClient) GetNodeByAwsAutoScalingInstance(instance *autoscaling.Instance) (*v1.Node, error) {
-	mock.Counter["GetNodeByAwsAutoScalingInstance"]++
+func (mock *MockClient) GetNodeByAutoScalingInstance(instance *autoscaling.Instance) (*v1.Node, error) {
+	mock.Counter["GetNodeByAutoScalingInstance"]++
 	nodes, _ := mock.GetNodes()
 	return mock.FilterNodeByAutoScalingInstance(nodes, instance)
 }
 
-func (mock *MockKubernetesClient) FilterNodeByAutoScalingInstance(nodes []v1.Node, instance *autoscaling.Instance) (*v1.Node, error) {
+func (mock *MockClient) FilterNodeByAutoScalingInstance(nodes []v1.Node, instance *autoscaling.Instance) (*v1.Node, error) {
 	mock.Counter["FilterNodeByAutoScalingInstance"]++
 	for _, node := range nodes {
 		if node.Spec.ProviderID == fmt.Sprintf("aws:///%s/%s", aws.StringValue(instance.AvailabilityZone), aws.StringValue(instance.InstanceId)) {
@@ -70,13 +70,13 @@ func (mock *MockKubernetesClient) FilterNodeByAutoScalingInstance(nodes []v1.Nod
 	return nil, errors.New("not found")
 }
 
-func (mock *MockKubernetesClient) UpdateNode(node *v1.Node) error {
+func (mock *MockClient) UpdateNode(node *v1.Node) error {
 	mock.Counter["UpdateNode"]++
 	mock.Nodes[node.Name] = *node
 	return nil
 }
 
-func (mock *MockKubernetesClient) Drain(nodeName string, ignoreDaemonSets, deleteLocalData bool) error {
+func (mock *MockClient) Drain(nodeName string, ignoreDaemonSets, deleteLocalData bool) error {
 	mock.Counter["Drain"]++
 	return nil
 }
