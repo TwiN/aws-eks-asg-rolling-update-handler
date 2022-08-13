@@ -78,7 +78,7 @@ func (k *Client) GetPodsInNode(node string) ([]v1.Pod, error) {
 	return podList.Items, nil
 }
 
-// GetNodeByAwsAutoScalingInstance gets the Kubernetes node matching an AWS AutoScaling instance
+// GetNodeByAutoScalingInstance gets the Kubernetes node matching an AWS AutoScaling instance
 // Because we cannot filter by spec.providerID, the entire list of nodes is fetched every time
 // this function is called
 func (k *Client) GetNodeByAutoScalingInstance(instance *autoscaling.Instance) (*v1.Node, error) {
