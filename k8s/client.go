@@ -70,7 +70,7 @@ func (k *Client) GetNodes() ([]v1.Node, error) {
 // GetPodsInNode retrieves all pods from a given node
 func (k *Client) GetPodsInNode(node string) ([]v1.Pod, error) {
 	podList, err := k.client.CoreV1().Pods("").List(context.TODO(), metav1.ListOptions{
-		FieldSelector: fmt.Sprintf("spec.nodeName=%s", node),
+		FieldSelector: "spec.nodeName=" + node,
 	})
 	if err != nil {
 		return nil, err
@@ -82,20 +82,6 @@ func (k *Client) GetPodsInNode(node string) ([]v1.Pod, error) {
 // Because we cannot filter by spec.providerID, the entire list of nodes is fetched every time
 // this function is called
 func (k *Client) GetNodeByAutoScalingInstance(instance *autoscaling.Instance) (*v1.Node, error) {
-	////For some reason, we can't filter by spec.providerID
-	//api := k.client.CoreV1().Nodes()
-	//nodeList, err := api.List(metav1.ListOptions{
-	//	//LabelSelector: fmt.Sprintf("%s=%s", HostNameAnnotationKey, aws.StringValue(instance.InstanceId)),
-	//	FieldSelector: fmt.Sprintf("spec.providerID=aws:///%s/%s", aws.StringValue(instance.AvailabilityZone), aws.StringValue(instance.InstanceId)),
-	//	Limit:         1,
-	//})
-	//if err != nil {
-	//	return nil, err
-	//}
-	//if len(nodeList.Items) == 0 {
-	//	return nil, fmt.Errorf("nodes with AWS instance id \"%s\" not found", aws.StringValue(instance.InstanceId))
-	//}
-	//return &nodeList.Items[0], nil
 	nodes, err := k.GetNodes()
 	if err != nil {
 		return nil, err
