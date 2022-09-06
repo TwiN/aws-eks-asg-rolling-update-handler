@@ -1,9 +1,9 @@
 module github.com/TwiN/aws-eks-asg-rolling-update-handler
 
-go 1.18
+go 1.19
 
 require (
-	github.com/TwiN/gocache/v2 v2.0.0
+	github.com/TwiN/gocache/v2 v2.1.1
 	github.com/aws/aws-sdk-go v1.36.5
 	github.com/prometheus/client_golang v1.12.1
 	k8s.io/api v0.24.2
