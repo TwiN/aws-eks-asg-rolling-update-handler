@@ -12,33 +12,35 @@ import (
 var cfg *config
 
 const (
-	EnvEnvironment           = "ENVIRONMENT"
-	EnvDebug                 = "DEBUG"
-	EnvIgnoreDaemonSets      = "IGNORE_DAEMON_SETS"
-	EnvDeleteLocalData       = "DELETE_LOCAL_DATA" // Deprecated: in favor of DeleteEmptyDirData (DELETE_EMPTY_DIR_DATA)
-	EnvDeleteEmptyDirData    = "DELETE_EMPTY_DIR_DATA"
-	EnvClusterName           = "CLUSTER_NAME"
-	EnvAutodiscoveryTags     = "AUTODISCOVERY_TAGS"
-	EnvAutoScalingGroupNames = "AUTO_SCALING_GROUP_NAMES"
-	EnvAwsRegion             = "AWS_REGION"
-	EnvExecutionInterval     = "EXECUTION_INTERVAL"
-	EnvExecutionTimeout      = "EXECUTION_TIMEOUT"
-	EnvMetrics               = "METRICS"
-	EnvMetricsPort           = "METRICS_PORT"
+	EnvEnvironment               = "ENVIRONMENT"
+	EnvDebug                     = "DEBUG"
+	EnvIgnoreDaemonSets          = "IGNORE_DAEMON_SETS"
+	EnvDeleteLocalData           = "DELETE_LOCAL_DATA" // Deprecated: in favor of DeleteEmptyDirData (DELETE_EMPTY_DIR_DATA)
+	EnvDeleteEmptyDirData        = "DELETE_EMPTY_DIR_DATA"
+	EnvClusterName               = "CLUSTER_NAME"
+	EnvAutodiscoveryTags         = "AUTODISCOVERY_TAGS"
+	EnvAutoScalingGroupNames     = "AUTO_SCALING_GROUP_NAMES"
+	EnvAwsRegion                 = "AWS_REGION"
+	EnvExecutionInterval         = "EXECUTION_INTERVAL"
+	EnvExecutionTimeout          = "EXECUTION_TIMEOUT"
+	EnvPodTerminationGracePeriod = "POD_TERMINATION_GRACE_PERIOD"
+	EnvMetrics                   = "METRICS"
+	EnvMetricsPort               = "METRICS_PORT"
 )
 
 type config struct {
-	Environment           string        // Optional
-	Debug                 bool          // Defaults to false
-	AutoScalingGroupNames []string      // Required if AutodiscoveryTags not provided
-	AutodiscoveryTags     string        // Required if AutoScalingGroupNames not provided
-	AwsRegion             string        // Defaults to us-west-2
-	IgnoreDaemonSets      bool          // Defaults to true
-	DeleteEmptyDirData    bool          // Defaults to true
-	ExecutionInterval     time.Duration // Defaults to 20s
-	ExecutionTimeout      time.Duration // Defaults to 900s
-	Metrics               bool          // Defaults to false
-	MetricsPort           int           // Defaults to 8080
+	Environment               string        // Optional
+	Debug                     bool          // Defaults to false
+	AutoScalingGroupNames     []string      // Required if AutodiscoveryTags not provided
+	AutodiscoveryTags         string        // Required if AutoScalingGroupNames not provided
+	AwsRegion                 string        // Defaults to us-west-2
+	IgnoreDaemonSets          bool          // Defaults to true
+	DeleteEmptyDirData        bool          // Defaults to true
+	ExecutionInterval         time.Duration // Defaults to 20s
+	ExecutionTimeout          time.Duration // Defaults to 900s
+	PodTerminationGracePeriod int           // Defaults to -1
+	Metrics                   bool          // Defaults to false
+	MetricsPort               int           // Defaults to 8080
 }
 
 // Initialize is used to initialize the application's configuration
@@ -110,6 +112,16 @@ func Initialize() error {
 	} else {
 		log.Printf("Environment variable '%s' not specified, defaulting to 900 seconds", EnvExecutionTimeout)
 		cfg.ExecutionTimeout = time.Second * 900
+	}
+	if terminationGracePeriod := os.Getenv(EnvPodTerminationGracePeriod); len(terminationGracePeriod) > 0 {
+		if gracePeriod, err := strconv.Atoi(terminationGracePeriod); err != nil {
+			return fmt.Errorf("environment variable '%s' must be an integer", EnvPodTerminationGracePeriod)
+		} else {
+			cfg.PodTerminationGracePeriod = gracePeriod
+		}
+	} else {
+		log.Printf("Environment variable '%s' not specified, defaulting to -1 (pod's terminationGracePeriodSeconds)", EnvPodTerminationGracePeriod)
+		cfg.PodTerminationGracePeriod = -1
 	}
 	return nil
 }

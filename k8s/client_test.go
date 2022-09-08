@@ -11,7 +11,7 @@ import (
 func TestClient_Drain(t *testing.T) {
 	fakeKubernetesClient := fakekubernetes.NewSimpleClientset(&v1.Node{ObjectMeta: metav1.ObjectMeta{Name: "default"}})
 	kc := NewClient(fakeKubernetesClient)
-	err := kc.Drain("default", true, true)
+	err := kc.Drain("default", true, true, -1)
 	if err != nil {
 		t.Errorf("Unexpected error: %v", err)
 	}
