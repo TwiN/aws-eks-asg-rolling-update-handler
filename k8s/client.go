@@ -33,7 +33,7 @@ type ClientAPI interface {
 	GetNodeByAutoScalingInstance(instance *autoscaling.Instance) (*v1.Node, error)
 	FilterNodeByAutoScalingInstance(nodes []v1.Node, instance *autoscaling.Instance) (*v1.Node, error)
 	UpdateNode(node *v1.Node) error
-	Drain(nodeName string, ignoreDaemonSets, deleteEmptyDirData bool) error
+	Drain(nodeName string, ignoreDaemonSets, deleteEmptyDirData bool, podTerminationGracePeriod int) error
 }
 
 type Client struct {
@@ -108,7 +108,7 @@ func (k *Client) UpdateNode(node *v1.Node) error {
 }
 
 // Drain gracefully deletes all pods from a given node
-func (k *Client) Drain(nodeName string, ignoreDaemonSets, deleteEmptyDirData bool) error {
+func (k *Client) Drain(nodeName string, ignoreDaemonSets, deleteEmptyDirData bool, podTerminationGracePeriod int) error {
 	node, err := k.client.CoreV1().Nodes().Get(context.TODO(), nodeName, metav1.GetOptions{})
 	if err != nil {
 		return err
@@ -118,7 +118,7 @@ func (k *Client) Drain(nodeName string, ignoreDaemonSets, deleteEmptyDirData boo
 		Force:               true,
 		IgnoreAllDaemonSets: ignoreDaemonSets,
 		DeleteEmptyDirData:  deleteEmptyDirData,
-		GracePeriodSeconds:  -1,
+		GracePeriodSeconds:  podTerminationGracePeriod,
 		Timeout:             5 * time.Minute,
 		Ctx:                 context.TODO(),
 		Out:                 drainLogger{NodeName: nodeName},
