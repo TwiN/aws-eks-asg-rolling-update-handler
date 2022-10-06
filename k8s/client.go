@@ -70,7 +70,8 @@ func (k *Client) GetNodes() ([]v1.Node, error) {
 // GetPodsInNode retrieves all pods from a given node
 func (k *Client) GetPodsInNode(node string) ([]v1.Pod, error) {
 	podList, err := k.client.CoreV1().Pods("").List(context.TODO(), metav1.ListOptions{
-		FieldSelector: "spec.nodeName=" + node,
+		FieldSelector:   "spec.nodeName=" + node,
+		ResourceVersion: "0",
 	})
 	if err != nil {
 		return nil, err
