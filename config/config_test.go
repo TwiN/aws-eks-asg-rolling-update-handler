@@ -10,6 +10,7 @@ func TestInitialize(t *testing.T) {
 	_ = os.Setenv(EnvAutoScalingGroupNames, "asg-a,asg-b,asg-c")
 	_ = os.Setenv(EnvIgnoreDaemonSets, "false")
 	_ = os.Setenv(EnvDeleteLocalData, "false")
+	_ = os.Setenv(EnvSlowMode, "true")
 	defer os.Clearenv()
 	_ = Initialize()
 	config := Get()
@@ -17,10 +18,13 @@ func TestInitialize(t *testing.T) {
 		t.Error()
 	}
 	if config.IgnoreDaemonSets {
-		t.Error()
+		t.Error("IgnoreDaemonSets should be false")
 	}
 	if config.DeleteEmptyDirData {
-		t.Error()
+		t.Error("DeleteEmptyDirData should be false")
+	}
+	if !config.SlowMode {
+		t.Error("SlowMode should be true")
 	}
 }
 
@@ -37,6 +41,9 @@ func TestInitialize_withDefaultNonRequiredValues(t *testing.T) {
 	}
 	if !config.DeleteEmptyDirData {
 		t.Error("should've defaulted to deleting local data")
+	}
+	if config.SlowMode {
+		t.Error("SlowMode should be false")
 	}
 }
 
