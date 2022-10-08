@@ -26,6 +26,7 @@ const (
 	EnvPodTerminationGracePeriod = "POD_TERMINATION_GRACE_PERIOD"
 	EnvMetrics                   = "METRICS"
 	EnvMetricsPort               = "METRICS_PORT"
+	EnvSlowMode                  = "SLOW_MODE"
 )
 
 type config struct {
@@ -41,6 +42,7 @@ type config struct {
 	PodTerminationGracePeriod int           // Defaults to -1
 	Metrics                   bool          // Defaults to false
 	MetricsPort               int           // Defaults to 8080
+	SlowMode                  bool          // Defaults to false
 }
 
 // Initialize is used to initialize the application's configuration
@@ -48,6 +50,7 @@ func Initialize() error {
 	cfg = &config{
 		Environment: strings.ToLower(os.Getenv(EnvEnvironment)),
 		Debug:       strings.ToLower(os.Getenv(EnvDebug)) == "true",
+		SlowMode:    strings.ToLower(os.Getenv(EnvSlowMode)) == "true",
 	}
 	if clusterName := os.Getenv(EnvClusterName); len(clusterName) > 0 {
 		cfg.AutodiscoveryTags = fmt.Sprintf("k8s.io/cluster-autoscaler/%s=owned,k8s.io/cluster-autoscaler/enabled=true", clusterName)
@@ -103,8 +106,8 @@ func Initialize() error {
 		log.Printf("Environment variable '%s' not specified, defaulting to 20 seconds", EnvExecutionInterval)
 		cfg.ExecutionInterval = time.Second * 20
 	}
-	if executionTImeout := os.Getenv(EnvExecutionTimeout); len(executionTImeout) > 0 {
-		if timeout, err := strconv.Atoi(executionTImeout); err != nil {
+	if executionTimeout := os.Getenv(EnvExecutionTimeout); len(executionTimeout) > 0 {
+		if timeout, err := strconv.Atoi(executionTimeout); err != nil {
 			return fmt.Errorf("environment variable '%s' must be an integer", EnvExecutionTimeout)
 		} else {
 			cfg.ExecutionTimeout = time.Second * time.Duration(timeout)

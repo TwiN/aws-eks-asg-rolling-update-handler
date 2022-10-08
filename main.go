@@ -117,7 +117,6 @@ func DoHandleRollingUpgrade(client k8s.ClientAPI, ec2Service ec2iface.EC2API, au
 			log.Printf("[%s] Skipping because unable to separate outdated instances from updated instances: %v", aws.StringValue(autoScalingGroup.AutoScalingGroupName), err.Error())
 			continue
 		}
-		fmt.Printf("[%s] Found %d outdated instances and %d updated instances\n", aws.StringValue(autoScalingGroup.AutoScalingGroupName), len(outdatedInstances), len(updatedInstances))
 		metrics.Server.UpdatedNodes.WithLabelValues(aws.StringValue(autoScalingGroup.AutoScalingGroupName)).Set(float64(len(updatedInstances)))
 		metrics.Server.OutdatedNodes.WithLabelValues(aws.StringValue(autoScalingGroup.AutoScalingGroupName)).Set(float64(len(outdatedInstances)))
 		if config.Get().Debug {
@@ -204,7 +203,12 @@ func DoHandleRollingUpgrade(client k8s.ClientAPI, ec2Service ec2iface.EC2API, au
 					// As a result, we return here to make sure that multiple old instances didn't use the same updated
 					// instances to calculate resources available
 					log.Printf("[%s][%s] Node has been drained and scheduled for termination successfully", aws.StringValue(autoScalingGroup.AutoScalingGroupName), aws.StringValue(outdatedInstance.InstanceId))
-					return true
+					if config.Get().SlowMode {
+						// If SlowMode is enabled, we'll return after draining a node and wait for the next execution
+						return true
+					}
+					// Move on to the next ASG
+					break
 				} else {
 					// Don't increase the ASG if the node has already been drained or scheduled for termination
 					if minutesSinceDrained != -1 || minutesSinceTerminated != -1 {

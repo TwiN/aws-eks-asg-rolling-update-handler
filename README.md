@@ -53,7 +53,10 @@ Therefore, this application will not run into any issues if it is restarted, res
 | EXECUTION_TIMEOUT            | Maximum execution duration before timing out in seconds                                                                                                                                                                | no       | `900`       |
 | POD_TERMINATION_GRACE_PERIOD | How long to wait for a pod to terminate in seconds; 0 means "delete immediately"; set to a negative value to use the pod's terminationGracePeriodSeconds.                                                              | no       | `-1`        |
 | METRICS_PORT                 | Port to bind metrics server to                                                                                                                                                                                         | no       | `8080`      |
-| METRICS                      | Expose metrics in Promtheus format at `:${METRICS_PORT}/metrics`                                                                                                                                                       | no       | `""`        | 
+| METRICS                      | Expose metrics in Prometheus format at `:${METRICS_PORT}/metrics`                                                                                                                                                      | no       | `""`        | 
+| SLOW_MODE                    | If enabled, every time a node is terminated during an execution, the current execution will stop rather than continuing to the next ASG                                                                                | no       | `false`     | 
+
+**NOTE:** Only one of `CLUSTER_NAME`, `AUTODISCOVERY_TAGS` or `AUTO_SCALING_GROUP_NAMES` must be set.
 
 
 ## Metrics
