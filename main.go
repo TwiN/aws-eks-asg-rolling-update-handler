@@ -28,6 +28,10 @@ var (
 	executionFailedCounter = 0
 )
 
+func init() {
+	rand.Seed(time.Now().UnixNano())
+}
+
 func main() {
 	err := config.Initialize()
 	if err != nil {
@@ -141,6 +145,11 @@ func DoHandleRollingUpgrade(client k8s.ClientAPI, ec2Service ec2iface.EC2API, au
 			log.Printf("[%s] ASG has %d non-ready updated nodes/instances, waiting until all nodes/instances are ready", aws.StringValue(autoScalingGroup.AutoScalingGroupName), numberOfNonReadyNodesOrInstances)
 			continue
 		}
+		// Shuffle the outdated instances so we don't always try to terminate the same instance.
+		// This is also useful if you want to have more than one aws-eks-asg-rolling-update-handler running
+		rand.Shuffle(len(outdatedInstances), func(i, j int) {
+			outdatedInstances[i], outdatedInstances[j] = outdatedInstances[j], outdatedInstances[i]
+		})
 		for _, outdatedInstance := range outdatedInstances {
 			node, err := client.GetNodeByAutoScalingInstance(outdatedInstance)
 			if err != nil {
