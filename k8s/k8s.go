@@ -29,6 +29,7 @@ func CreateClientSet() (*kubernetes.Clientset, error) {
 			return nil, err
 		}
 		cfg = clientConfig
+		cfg.UserAgent = "aws-eks-asg-rolling-update-handler/1.0"
 	} else {
 		clientConfig, err := rest.InClusterConfig()
 		if err != nil {
