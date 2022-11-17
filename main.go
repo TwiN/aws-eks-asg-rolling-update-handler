@@ -151,13 +151,39 @@ func DoHandleRollingUpgrade(client k8s.ClientAPI, ec2Service ec2iface.EC2API, au
 		rand.Shuffle(len(outdatedInstances), func(i, j int) {
 			outdatedInstances[i], outdatedInstances[j] = outdatedInstances[j], outdatedInstances[i]
 		})
+
+		if config.Get().CordonBefore {
+			for _, outdatedInstance := range outdatedInstances {
+				node, err := client.GetNodeByAutoScalingInstance(outdatedInstance)
+				if err != nil {
+					log.Printf("[%s][%s] Skipping because unable to get outdated node from Kubernetes: %v", aws.StringValue(autoScalingGroup.AutoScalingGroupName), aws.StringValue(outdatedInstance.InstanceId), err.Error())
+					continue
+				}
+
+				_, minutesSinceCordoned, _, _ := getRollingUpdateTimestampsFromNode(node)
+				if minutesSinceCordoned == -1 {
+					log.Printf("[%s][%s] Cordoning node", aws.StringValue(autoScalingGroup.AutoScalingGroupName), aws.StringValue(outdatedInstance.InstanceId))
+					if err := client.Cordon(node.Name); err != nil {
+						metrics.Server.Errors.Inc()
+						log.Printf("[%s][%s] Skipping because ran into error while cordoning node: %v", aws.StringValue(autoScalingGroup.AutoScalingGroupName), aws.StringValue(outdatedInstance.InstanceId), err.Error())
+						continue
+					}
+
+					if err := k8s.AnnotateNodeByAutoScalingInstance(client, outdatedInstance, k8s.AnnotationRollingUpdateCordonedTimestamp, time.Now().Format(time.RFC3339)); err != nil {
+						log.Printf("[%s][%s] Skipping because unable to annotate node: %v", aws.StringValue(autoScalingGroup.AutoScalingGroupName), aws.StringValue(outdatedInstance.InstanceId), err.Error())
+						continue
+					}
+				}
+			}
+		}
+
 		for _, outdatedInstance := range outdatedInstances {
 			node, err := client.GetNodeByAutoScalingInstance(outdatedInstance)
 			if err != nil {
 				log.Printf("[%s][%s] Skipping because unable to get outdated node from Kubernetes: %v", aws.StringValue(autoScalingGroup.AutoScalingGroupName), aws.StringValue(outdatedInstance.InstanceId), err.Error())
 				continue
 			}
-			minutesSinceStarted, minutesSinceDrained, minutesSinceTerminated := getRollingUpdateTimestampsFromNode(node)
+			minutesSinceStarted, minutesSinceCordoned, minutesSinceDrained, minutesSinceTerminated := getRollingUpdateTimestampsFromNode(node)
 			// Check if outdated nodes in k8s have been marked with annotation from aws-eks-asg-rolling-update-handler
 			if minutesSinceStarted == -1 {
 				log.Printf("[%s][%s] Starting node rollout process", aws.StringValue(autoScalingGroup.AutoScalingGroupName), aws.StringValue(outdatedInstance.InstanceId))
@@ -173,6 +199,20 @@ func DoHandleRollingUpgrade(client k8s.ClientAPI, ec2Service ec2iface.EC2API, au
 				hasEnoughResources := k8s.CheckIfNodeHasEnoughResourcesToTransferAllPodsInNodes(client, node, updatedReadyNodes)
 				if hasEnoughResources {
 					log.Printf("[%s][%s] Updated nodes have enough resources available", aws.StringValue(autoScalingGroup.AutoScalingGroupName), aws.StringValue(outdatedInstance.InstanceId))
+					if minutesSinceCordoned == -1 {
+						log.Printf("[%s][%s] Cordoning node", aws.StringValue(autoScalingGroup.AutoScalingGroupName), aws.StringValue(outdatedInstance.InstanceId))
+						err := client.Cordon(node.Name)
+						if err != nil {
+							metrics.Server.Errors.Inc()
+							log.Printf("[%s][%s] Skipping because ran into error while cordoning node: %v", aws.StringValue(autoScalingGroup.AutoScalingGroupName), aws.StringValue(outdatedInstance.InstanceId), err.Error())
+							continue
+						} else {
+							// Only annotate if no error was encountered
+							_ = k8s.AnnotateNodeByAutoScalingInstance(client, outdatedInstance, k8s.AnnotationRollingUpdateCordonedTimestamp, time.Now().Format(time.RFC3339))
+						}
+					} else {
+						log.Printf("[%s][%s] Node has already been cordoned %d minutes ago, skipping", aws.StringValue(autoScalingGroup.AutoScalingGroupName), aws.StringValue(outdatedInstance.InstanceId), minutesSinceCordoned)
+					}
 					if minutesSinceDrained == -1 {
 						log.Printf("[%s][%s] Draining node", aws.StringValue(autoScalingGroup.AutoScalingGroupName), aws.StringValue(outdatedInstance.InstanceId))
 						err := client.Drain(node.Name, config.Get().IgnoreDaemonSets, config.Get().DeleteEmptyDirData, config.Get().PodTerminationGracePeriod)
@@ -312,7 +352,7 @@ func getReadyNodesAndNumberOfNonReadyNodesOrInstances(client k8s.ClientAPI, upda
 	return updatedReadyNodes, numberOfNonReadyNodesOrInstances
 }
 
-func getRollingUpdateTimestampsFromNode(node *v1.Node) (minutesSinceStarted int, minutesSinceDrained int, minutesSinceTerminated int) {
+func getRollingUpdateTimestampsFromNode(node *v1.Node) (minutesSinceStarted int, minutesSinceCordoned int, minutesSinceDrained int, minutesSinceTerminated int) {
 	rollingUpdateStartedAt, ok := node.Annotations[k8s.AnnotationRollingUpdateStartedTimestamp]
 	if ok {
 		startedAt, err := time.Parse(time.RFC3339, rollingUpdateStartedAt)
@@ -321,6 +361,15 @@ func getRollingUpdateTimestampsFromNode(node *v1.Node) (minutesSinceStarted int,
 		}
 	} else {
 		minutesSinceStarted = -1
+	}
+	cordonedAtValue, ok := node.Annotations[k8s.AnnotationRollingUpdateCordonedTimestamp]
+	if ok {
+		cordonedAt, err := time.Parse(time.RFC3339, cordonedAtValue)
+		if err == nil {
+			minutesSinceCordoned = int(time.Since(cordonedAt).Minutes())
+		}
+	} else {
+		minutesSinceCordoned = -1
 	}
 	drainedAtValue, ok := node.Annotations[k8s.AnnotationRollingUpdateDrainedTimestamp]
 	if ok {

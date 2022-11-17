@@ -17,6 +17,7 @@ import (
 
 const (
 	AnnotationRollingUpdateStartedTimestamp    = "aws-eks-asg-rolling-update-handler.twin.sh/started-at"
+	AnnotationRollingUpdateCordonedTimestamp   = "aws-eks-asg-rolling-update-handler.twin.sh/cordoned-at"
 	AnnotationRollingUpdateDrainedTimestamp    = "aws-eks-asg-rolling-update-handler.twin.sh/drained-at"
 	AnnotationRollingUpdateTerminatedTimestamp = "aws-eks-asg-rolling-update-handler.twin.sh/terminated-at"
 
@@ -33,6 +34,7 @@ type ClientAPI interface {
 	GetNodeByAutoScalingInstance(instance *autoscaling.Instance) (*v1.Node, error)
 	FilterNodeByAutoScalingInstance(nodes []v1.Node, instance *autoscaling.Instance) (*v1.Node, error)
 	UpdateNode(node *v1.Node) error
+	Cordon(nodeName string) error
 	Drain(nodeName string, ignoreDaemonSets, deleteEmptyDirData bool, podTerminationGracePeriod int) error
 }
 
@@ -108,6 +110,23 @@ func (k *Client) UpdateNode(node *v1.Node) error {
 	return err
 }
 
+// Cordon disables scheduling new pods onto the given node
+func (k *Client) Cordon(nodeName string) error {
+	node, err := k.client.CoreV1().Nodes().Get(context.TODO(), nodeName, metav1.GetOptions{})
+	if err != nil {
+		return err
+	}
+	drainer := &drain.Helper{
+		Client: k.client,
+		Ctx:    context.TODO(),
+	}
+	if err := drain.RunCordonOrUncordon(drainer, node, true); err != nil {
+		log.Printf("[%s][CORDONER] Failed to cordon node: %v", node.Name, err)
+		return err
+	}
+	return nil
+}
+
 // Drain gracefully deletes all pods from a given node
 func (k *Client) Drain(nodeName string, ignoreDaemonSets, deleteEmptyDirData bool, podTerminationGracePeriod int) error {
 	node, err := k.client.CoreV1().Nodes().Get(context.TODO(), nodeName, metav1.GetOptions{})
@@ -127,10 +146,6 @@ func (k *Client) Drain(nodeName string, ignoreDaemonSets, deleteEmptyDirData boo
 		OnPodDeletedOrEvicted: func(pod *v1.Pod, usingEviction bool) {
 			log.Printf("[%s][DRAINER] evicted pod %s/%s", nodeName, pod.Namespace, pod.Name)
 		},
-	}
-	if err := drain.RunCordonOrUncordon(drainer, node, true); err != nil {
-		log.Printf("[%s][DRAINER] Failed to cordon node: %v", node.Name, err)
-		return err
 	}
 	if err := drain.RunNodeDrain(drainer, node.Name); err != nil {
 		log.Printf("[%s][DRAINER] Failed to drain node: %v", node.Name, err)
