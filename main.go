@@ -152,7 +152,7 @@ func DoHandleRollingUpgrade(client k8s.ClientAPI, ec2Service ec2iface.EC2API, au
 			outdatedInstances[i], outdatedInstances[j] = outdatedInstances[j], outdatedInstances[i]
 		})
 
-		if config.Get().CordonBefore {
+		if config.Get().EagerCordoning {
 			for _, outdatedInstance := range outdatedInstances {
 				node, err := client.GetNodeByAutoScalingInstance(outdatedInstance)
 				if err != nil {

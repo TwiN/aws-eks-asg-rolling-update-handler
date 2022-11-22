@@ -27,7 +27,7 @@ const (
 	EnvMetrics                   = "METRICS"
 	EnvMetricsPort               = "METRICS_PORT"
 	EnvSlowMode                  = "SLOW_MODE"
-	EnvCordonBefore              = "CORDON_BEFORE"
+	EnvEagerCordoning            = "EAGER_CORDONING"
 )
 
 type config struct {
@@ -44,16 +44,16 @@ type config struct {
 	Metrics                   bool          // Defaults to false
 	MetricsPort               int           // Defaults to 8080
 	SlowMode                  bool          // Defaults to false
-	CordonBefore              bool          // Defaults to false
+	EagerCordoning            bool          // Defaults to false
 }
 
 // Initialize is used to initialize the application's configuration
 func Initialize() error {
 	cfg = &config{
-		Environment:  strings.ToLower(os.Getenv(EnvEnvironment)),
-		Debug:        strings.ToLower(os.Getenv(EnvDebug)) == "true",
-		SlowMode:     strings.ToLower(os.Getenv(EnvSlowMode)) == "true",
-		CordonBefore: strings.ToLower(os.Getenv(EnvCordonBefore)) == "true",
+		Environment:    strings.ToLower(os.Getenv(EnvEnvironment)),
+		Debug:          strings.ToLower(os.Getenv(EnvDebug)) == "true",
+		SlowMode:       strings.ToLower(os.Getenv(EnvSlowMode)) == "true",
+		EagerCordoning: strings.ToLower(os.Getenv(EnvEagerCordoning)) == "true",
 	}
 	if clusterName := os.Getenv(EnvClusterName); len(clusterName) > 0 {
 		cfg.AutodiscoveryTags = fmt.Sprintf("k8s.io/cluster-autoscaler/%s=owned,k8s.io/cluster-autoscaler/enabled=true", clusterName)
