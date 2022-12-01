@@ -76,6 +76,11 @@ func (mock *MockClient) UpdateNode(node *v1.Node) error {
 	return nil
 }
 
+func (mock *MockClient) Cordon(nodeName string) error {
+	mock.Counter["Cordon"]++
+	return nil
+}
+
 func (mock *MockClient) Drain(nodeName string, ignoreDaemonSets, deleteLocalData bool, podTerminationGracePeriod int) error {
 	mock.Counter["Drain"]++
 	return nil
