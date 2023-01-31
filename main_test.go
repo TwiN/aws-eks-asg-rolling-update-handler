@@ -645,3 +645,29 @@ func TestHandleRollingUpgrade_withMixedInstancePolicyWhenOneOfTheInstanceTypesOv
 		t.Error("The old instance's instance type is no longer part of the ASG's MixedInstancePolicy's LaunchTemplate overrides, therefore, it is outdated and should've been annotated")
 	}
 }
+
+func TestHasAcceptableUpdatedNonReadyToUpdatedReadyNodesRatio(t *testing.T) {
+	// false: there's too many non-ready nodes
+	// true:  there's an acceptable amount of non-ready nodes given how many ready nodes there are
+	if HasAcceptableUpdatedNonReadyToUpdatedReadyNodesRatio(100, 0) {
+		t.Error("100NR/0R ready should not be acceptable")
+	}
+	if HasAcceptableUpdatedNonReadyToUpdatedReadyNodesRatio(50, 50) {
+		t.Error("50NR/50R should not be acceptable")
+	}
+	if !HasAcceptableUpdatedNonReadyToUpdatedReadyNodesRatio(5, 95) {
+		t.Error("5NR/95R should be acceptable")
+	}
+	if !HasAcceptableUpdatedNonReadyToUpdatedReadyNodesRatio(1, 99) {
+		t.Error("1NR/99R should be acceptable")
+	}
+	if !HasAcceptableUpdatedNonReadyToUpdatedReadyNodesRatio(0, 100) {
+		t.Error("0NR/100R should be acceptable")
+	}
+	if !HasAcceptableUpdatedNonReadyToUpdatedReadyNodesRatio(0, 1) {
+		t.Error("0NR/1R should be acceptable")
+	}
+	if !HasAcceptableUpdatedNonReadyToUpdatedReadyNodesRatio(0, 0) {
+		t.Error("0NR/0R should be acceptable")
+	}
+}

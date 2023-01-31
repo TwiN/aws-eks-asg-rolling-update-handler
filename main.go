@@ -20,7 +20,8 @@ import (
 )
 
 const (
-	MaximumFailedExecutionBeforePanic = 10 // Maximum number of allowed failed executions before panicking
+	MaximumFailedExecutionBeforePanic                        = 10   // Maximum number of allowed failed executions before panicking
+	MaximumAcceptableUpdatedNonReadyToUpdatedReadyNodesRatio = 0.15 // To help with larger clusters
 )
 
 var (
@@ -131,7 +132,7 @@ func DoHandleRollingUpgrade(client k8s.ClientAPI, ec2Service ec2iface.EC2API, au
 		// Get the updated and ready nodes from the list of updated instances
 		// This will be used to determine if the desired number of updated instances need to scale up or not
 		// We also use this to clean up, if necessary
-		updatedReadyNodes, numberOfNonReadyNodesOrInstances := getReadyNodesAndNumberOfNonReadyNodesOrInstances(client, updatedInstances, autoScalingGroup)
+		updatedReadyNodes, numberOfNonReadyUpdatedNodesOrInstances := getReadyNodesAndNumberOfNonReadyNodesOrInstances(client, updatedInstances, autoScalingGroup)
 		if len(outdatedInstances) == 0 {
 			log.Printf("[%s] All instances are up to date", aws.StringValue(autoScalingGroup.AutoScalingGroupName))
 			continue
@@ -142,16 +143,15 @@ func DoHandleRollingUpgrade(client k8s.ClientAPI, ec2Service ec2iface.EC2API, au
 			log.Printf("[%s] Skipping because ASG has a desired capacity of %d, but only has %d instances", aws.StringValue(autoScalingGroup.AutoScalingGroupName), aws.Int64Value(autoScalingGroup.DesiredCapacity), len(autoScalingGroup.Instances))
 			continue
 		}
-		if numberOfNonReadyNodesOrInstances != 0 {
-			log.Printf("[%s] ASG has %d non-ready updated nodes/instances, waiting until all nodes/instances are ready", aws.StringValue(autoScalingGroup.AutoScalingGroupName), numberOfNonReadyNodesOrInstances)
+		if !HasAcceptableUpdatedNonReadyToUpdatedReadyNodesRatio(numberOfNonReadyUpdatedNodesOrInstances, len(updatedReadyNodes)) {
+			log.Printf("[%s] ASG has too many non-ready updated nodes/instances (%d), waiting until they become ready", aws.StringValue(autoScalingGroup.AutoScalingGroupName), numberOfNonReadyUpdatedNodesOrInstances)
 			continue
 		}
-		// Shuffle the outdated instances so we don't always try to terminate the same instance.
+		// Shuffle the outdated instances, so that we don't always try to terminate the same instance.
 		// This is also useful if you want to have more than one aws-eks-asg-rolling-update-handler running
 		rand.Shuffle(len(outdatedInstances), func(i, j int) {
 			outdatedInstances[i], outdatedInstances[j] = outdatedInstances[j], outdatedInstances[i]
 		})
-
 		if config.Get().EagerCordoning {
 			for _, outdatedInstance := range outdatedInstances {
 				node, err := client.GetNodeByAutoScalingInstance(outdatedInstance)
@@ -159,7 +159,6 @@ func DoHandleRollingUpgrade(client k8s.ClientAPI, ec2Service ec2iface.EC2API, au
 					log.Printf("[%s][%s] Skipping because unable to get outdated node from Kubernetes: %v", aws.StringValue(autoScalingGroup.AutoScalingGroupName), aws.StringValue(outdatedInstance.InstanceId), err.Error())
 					continue
 				}
-
 				_, minutesSinceCordoned, _, _ := getRollingUpdateTimestampsFromNode(node)
 				if minutesSinceCordoned == -1 {
 					log.Printf("[%s][%s] Cordoning node", aws.StringValue(autoScalingGroup.AutoScalingGroupName), aws.StringValue(outdatedInstance.InstanceId))
@@ -168,7 +167,6 @@ func DoHandleRollingUpgrade(client k8s.ClientAPI, ec2Service ec2iface.EC2API, au
 						log.Printf("[%s][%s] Skipping because ran into error while cordoning node: %v", aws.StringValue(autoScalingGroup.AutoScalingGroupName), aws.StringValue(outdatedInstance.InstanceId), err.Error())
 						continue
 					}
-
 					if err := k8s.AnnotateNodeByAutoScalingInstance(client, outdatedInstance, k8s.AnnotationRollingUpdateCordonedTimestamp, time.Now().Format(time.RFC3339)); err != nil {
 						log.Printf("[%s][%s] Skipping because unable to annotate node: %v", aws.StringValue(autoScalingGroup.AutoScalingGroupName), aws.StringValue(outdatedInstance.InstanceId), err.Error())
 						continue
@@ -176,7 +174,6 @@ func DoHandleRollingUpgrade(client k8s.ClientAPI, ec2Service ec2iface.EC2API, au
 				}
 			}
 		}
-
 		for _, outdatedInstance := range outdatedInstances {
 			node, err := client.GetNodeByAutoScalingInstance(outdatedInstance)
 			if err != nil {
@@ -540,4 +537,14 @@ func compareLaunchTemplateVersions(targetTemplate *ec2.LaunchTemplate, lt1, lt2 
 		lt2version = aws.StringValue(lt2.Version)
 	}
 	return lt1version == lt2version
+}
+
+func HasAcceptableUpdatedNonReadyToUpdatedReadyNodesRatio(numberOfUpdatedNonReadyNodes, numberOfUpdatedReadyNodes int) bool {
+	if numberOfUpdatedNonReadyNodes == 0 {
+		return true // all updated nodes are ready, so we can proceed
+	}
+	if numberOfUpdatedReadyNodes == 0 {
+		return false // there are no ready nodes AND there are non-ready nodes (we know this because of the previous check), so we cannot proceed
+	}
+	return float64(numberOfUpdatedNonReadyNodes)/float64(numberOfUpdatedReadyNodes) <= MaximumAcceptableUpdatedNonReadyToUpdatedReadyNodesRatio
 }
