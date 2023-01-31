@@ -56,6 +56,7 @@ func Initialize() error {
 		EagerCordoning: strings.ToLower(os.Getenv(EnvEagerCordoning)) == "true",
 	}
 	if clusterName := os.Getenv(EnvClusterName); len(clusterName) > 0 {
+		// See "Prerequisites" in https://docs.aws.amazon.com/eks/latest/userguide/autoscaling.html
 		cfg.AutodiscoveryTags = fmt.Sprintf("k8s.io/cluster-autoscaler/%s=owned,k8s.io/cluster-autoscaler/enabled=true", clusterName)
 	} else if autodiscoveryTags := os.Getenv(EnvAutodiscoveryTags); len(autodiscoveryTags) > 0 {
 		cfg.AutodiscoveryTags = autodiscoveryTags
