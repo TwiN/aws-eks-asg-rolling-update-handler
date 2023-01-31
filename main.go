@@ -20,8 +20,10 @@ import (
 )
 
 const (
-	MaximumFailedExecutionBeforePanic                        = 10   // Maximum number of allowed failed executions before panicking
-	MaximumAcceptableUpdatedNonReadyToUpdatedReadyNodesRatio = 0.15 // To help with larger clusters
+	MaximumFailedExecutionBeforePanic = 10 // Maximum number of allowed failed executions before panicking
+
+	MaximumAcceptableUpdatedNonReadyToUpdatedReadyNodesRatio = 0.11 // To help with larger clusters
+	MaximumNumberOfUpdatedNonReadyNodes                      = 5    // To prevent too many non-ready nodes from being taken into account when calculating resources available in one node
 )
 
 var (
@@ -143,7 +145,7 @@ func DoHandleRollingUpgrade(client k8s.ClientAPI, ec2Service ec2iface.EC2API, au
 			log.Printf("[%s] Skipping because ASG has a desired capacity of %d, but only has %d instances", aws.StringValue(autoScalingGroup.AutoScalingGroupName), aws.Int64Value(autoScalingGroup.DesiredCapacity), len(autoScalingGroup.Instances))
 			continue
 		}
-		if !HasAcceptableUpdatedNonReadyToUpdatedReadyNodesRatio(numberOfNonReadyUpdatedNodesOrInstances, len(updatedReadyNodes)) {
+		if !HasAcceptableNumberOfUpdatedNonReadyNodes(numberOfNonReadyUpdatedNodesOrInstances, len(updatedReadyNodes)) {
 			log.Printf("[%s] ASG has too many non-ready updated nodes/instances (%d), waiting until they become ready", aws.StringValue(autoScalingGroup.AutoScalingGroupName), numberOfNonReadyUpdatedNodesOrInstances)
 			continue
 		}
@@ -539,12 +541,20 @@ func compareLaunchTemplateVersions(targetTemplate *ec2.LaunchTemplate, lt1, lt2 
 	return lt1version == lt2version
 }
 
-func HasAcceptableUpdatedNonReadyToUpdatedReadyNodesRatio(numberOfUpdatedNonReadyNodes, numberOfUpdatedReadyNodes int) bool {
+// HasAcceptableNumberOfUpdatedNonReadyNodes checks if there's a sufficient amount of updated
+// and ready nodes to move on to the next step (drain & terminate an outdated node) for a number of non-ready nodes.
+//
+// The logic behind this is that the more nodes are ready and updated, the higher the confidence we have that the
+// upgrade is going well, so we can ramp things up faster the deeper we are in the upgrade process.
+func HasAcceptableNumberOfUpdatedNonReadyNodes(numberOfUpdatedNonReadyNodes, numberOfUpdatedReadyNodes int) bool {
 	if numberOfUpdatedNonReadyNodes == 0 {
 		return true // all updated nodes are ready, so we can proceed
 	}
 	if numberOfUpdatedReadyNodes == 0 {
 		return false // there are no ready nodes AND there are non-ready nodes (we know this because of the previous check), so we cannot proceed
+	}
+	if numberOfUpdatedNonReadyNodes > MaximumNumberOfUpdatedNonReadyNodes {
+		return false // there are too many non-ready nodes, so we cannot proceed
 	}
 	return float64(numberOfUpdatedNonReadyNodes)/float64(numberOfUpdatedReadyNodes) <= MaximumAcceptableUpdatedNonReadyToUpdatedReadyNodesRatio
 }
