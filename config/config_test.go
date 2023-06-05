@@ -54,7 +54,7 @@ func TestInitialize_withMissingRequiredValues(t *testing.T) {
 }
 
 func TestSet(t *testing.T) {
-	Set([]string{"asg-a", "asg-b", "asg-c"}, true, true)
+	Set([]string{"asg-a", "asg-b", "asg-c"}, true, true, false)
 	config := Get()
 	if len(config.AutoScalingGroupNames) != 3 {
 		t.Error()

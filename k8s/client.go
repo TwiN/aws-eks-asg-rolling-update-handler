@@ -17,7 +17,6 @@ import (
 
 const (
 	AnnotationRollingUpdateStartedTimestamp    = "aws-eks-asg-rolling-update-handler.twin.sh/started-at"
-	AnnotationRollingUpdateCordonedTimestamp   = "aws-eks-asg-rolling-update-handler.twin.sh/cordoned-at"
 	AnnotationRollingUpdateDrainedTimestamp    = "aws-eks-asg-rolling-update-handler.twin.sh/drained-at"
 	AnnotationRollingUpdateTerminatedTimestamp = "aws-eks-asg-rolling-update-handler.twin.sh/terminated-at"
 

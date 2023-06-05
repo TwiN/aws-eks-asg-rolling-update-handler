@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/TwiN/aws-eks-asg-rolling-update-handler/cloudtest"
+	"github.com/TwiN/aws-eks-asg-rolling-update-handler/config"
 	"github.com/TwiN/aws-eks-asg-rolling-update-handler/k8s"
 	"github.com/TwiN/aws-eks-asg-rolling-update-handler/k8stest"
 	"github.com/aws/aws-sdk-go/aws"
@@ -678,5 +679,70 @@ func TestHasAcceptableNumberOfUpdatedNonReadyNodes(t *testing.T) {
 	}
 	if !HasAcceptableNumberOfUpdatedNonReadyNodes(1, 11) {
 		t.Error("1NR/11R should be acceptable")
+	}
+}
+
+func TestHandleRollingUpgrade_withEagerCordoning(t *testing.T) {
+	config.Set(nil, true, true, true)
+	defer config.Set(nil, true, true, false)
+
+	oldInstance1 := cloudtest.CreateTestAutoScalingInstance("old-1", "v1", nil, "InService")
+	oldInstance2 := cloudtest.CreateTestAutoScalingInstance("old-2", "v1", nil, "InService")
+	oldInstance3 := cloudtest.CreateTestAutoScalingInstance("old-3", "v1", nil, "InService")
+	asg := cloudtest.CreateTestAutoScalingGroup("asg", "v2", nil, []*autoscaling.Instance{oldInstance1, oldInstance2, oldInstance3}, false)
+
+	oldNode1 := k8stest.CreateTestNode("old-node-1", aws.StringValue(oldInstance1.AvailabilityZone), aws.StringValue(oldInstance1.InstanceId), "1000m", "1000Mi")
+	oldNode2 := k8stest.CreateTestNode("old-node-2", aws.StringValue(oldInstance2.AvailabilityZone), aws.StringValue(oldInstance2.InstanceId), "1000m", "1000Mi")
+	oldNode3 := k8stest.CreateTestNode("old-node-3", aws.StringValue(oldInstance3.AvailabilityZone), aws.StringValue(oldInstance3.InstanceId), "1000m", "1000Mi")
+	oldNodePod1 := k8stest.CreateTestPod("old-pod-1", oldNode1.Name, "600m", "600Mi", false, v1.PodRunning)
+	oldNodePod2 := k8stest.CreateTestPod("old-pod-2", oldNode2.Name, "600m", "600Mi", false, v1.PodRunning)
+	oldNodePod3 := k8stest.CreateTestPod("old-pod-3", oldNode3.Name, "600m", "600Mi", false, v1.PodRunning)
+
+	mockClient := k8stest.NewMockClient([]v1.Node{oldNode1, oldNode2, oldNode3}, []v1.Pod{oldNodePod1, oldNodePod2, oldNodePod3})
+	mockEc2Service := cloudtest.NewMockEC2Service(nil)
+	mockAutoScalingService := cloudtest.NewMockAutoScalingService([]*autoscaling.Group{asg})
+
+	// First run (Node rollout process gets marked as started)
+	err := HandleRollingUpgrade(mockClient, mockEc2Service, mockAutoScalingService, []*autoscaling.Group{asg})
+	if err != nil {
+		t.Error("unexpected error:", err)
+	}
+	if mockClient.Counter["UpdateNode"] != 3 {
+		t.Error("Node should've been annotated as started, meaning that UpdateNode should've been called once")
+	}
+	// Make sure that all nodes were "eagerly cordoned"
+	if mockClient.Counter["Cordon"] != 3 {
+		t.Error("Node should've been annotated, meaning that Cordon should've been called thrice, but was called", mockClient.Counter["Cordon"], "times")
+	}
+}
+
+func TestHandleRollingUpgrade_withEagerCordoningDisabled(t *testing.T) {
+	// explicitly setting this, but eager cordoning is disabled by default anyways
+	config.Set(nil, true, true, false)
+
+	oldInstance1 := cloudtest.CreateTestAutoScalingInstance("old-1", "v1", nil, "InService")
+	oldInstance2 := cloudtest.CreateTestAutoScalingInstance("old-2", "v1", nil, "InService")
+	asg := cloudtest.CreateTestAutoScalingGroup("asg", "v2", nil, []*autoscaling.Instance{oldInstance1, oldInstance2}, false)
+
+	oldNode1 := k8stest.CreateTestNode("old-node-1", aws.StringValue(oldInstance1.AvailabilityZone), aws.StringValue(oldInstance1.InstanceId), "1000m", "1000Mi")
+	oldNode2 := k8stest.CreateTestNode("old-node-2", aws.StringValue(oldInstance2.AvailabilityZone), aws.StringValue(oldInstance2.InstanceId), "1000m", "1000Mi")
+	oldNodePod1 := k8stest.CreateTestPod("old-pod-1", oldNode1.Name, "600m", "600Mi", false, v1.PodRunning)
+	oldNodePod2 := k8stest.CreateTestPod("old-pod-2", oldNode2.Name, "600m", "600Mi", false, v1.PodRunning)
+
+	mockClient := k8stest.NewMockClient([]v1.Node{oldNode1, oldNode2}, []v1.Pod{oldNodePod1, oldNodePod2})
+	mockEc2Service := cloudtest.NewMockEC2Service(nil)
+	mockAutoScalingService := cloudtest.NewMockAutoScalingService([]*autoscaling.Group{asg})
+
+	// First run (Node rollout process gets marked as started)
+	err := HandleRollingUpgrade(mockClient, mockEc2Service, mockAutoScalingService, []*autoscaling.Group{asg})
+	if err != nil {
+		t.Error("unexpected error:", err)
+	}
+	if mockClient.Counter["UpdateNode"] != 2 {
+		t.Error("Nodes should've been annotated as started, meaning that UpdateNode should've been called twice")
+	}
+	// Make sure that all nodes were NOT "eagerly cordoned"
+	if mockClient.Counter["Cordon"] != 0 {
+		t.Error("Eager cordoning is not enabled, so no node should have been cordoned on the first execution")
 	}
 }
