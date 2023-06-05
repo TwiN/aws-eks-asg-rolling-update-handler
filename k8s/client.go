@@ -135,7 +135,7 @@ func (k *Client) Drain(nodeName string, ignoreDaemonSets, deleteEmptyDirData boo
 	}
 	drainer := &drain.Helper{
 		Client:              k.client,
-		Force:               true,
+		Force:               true, // Continue even if there are pods not managed by a ReplicationController, ReplicaSet, Job, DaemonSet or StatefulSet
 		IgnoreAllDaemonSets: ignoreDaemonSets,
 		DeleteEmptyDirData:  deleteEmptyDirData,
 		GracePeriodSeconds:  podTerminationGracePeriod,
