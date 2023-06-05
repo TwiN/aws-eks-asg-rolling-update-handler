@@ -135,21 +135,21 @@ func Initialize() error {
 
 // Set sets the application's configuration and is intended to be used for testing purposes.
 // See Initialize() for production
-func Set(autoScalingGroupNames []string, ignoreDaemonSets, deleteEmptyDirData bool) {
+func Set(autoScalingGroupNames []string, ignoreDaemonSets, deleteEmptyDirData, eagerCordoning bool) {
 	cfg = &config{
 		AutoScalingGroupNames: autoScalingGroupNames,
 		IgnoreDaemonSets:      ignoreDaemonSets,
 		DeleteEmptyDirData:    deleteEmptyDirData,
+		EagerCordoning:        eagerCordoning,
+		ExecutionInterval:     time.Second * 20,
+		ExecutionTimeout:      time.Second * 900,
 	}
 }
 
 func Get() *config {
 	if cfg == nil {
 		log.Println("Config wasn't initialized prior to being called. Assuming this is a test.")
-		cfg = &config{
-			ExecutionInterval: time.Second * 20,
-			ExecutionTimeout:  time.Second * 900,
-		}
+		Set(nil, true, true, false)
 	}
 	return cfg
 }
