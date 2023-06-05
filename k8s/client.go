@@ -146,6 +146,13 @@ func (k *Client) Drain(nodeName string, ignoreDaemonSets, deleteEmptyDirData boo
 			log.Printf("[%s][DRAINER] evicted pod %s/%s", nodeName, pod.Namespace, pod.Name)
 		},
 	}
+	if !node.Spec.Unschedulable {
+		// Cordon the node if it's not already unschedulable
+		if err := drain.RunCordonOrUncordon(drainer, node, true); err != nil {
+			log.Printf("[%s][DRAINER] Failed to cordon node: %v", node.Name, err)
+			return err
+		}
+	}
 	if err := drain.RunNodeDrain(drainer, node.Name); err != nil {
 		log.Printf("[%s][DRAINER] Failed to drain node: %v", node.Name, err)
 		return err
