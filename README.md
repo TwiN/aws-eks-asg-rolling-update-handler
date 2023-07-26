@@ -56,6 +56,7 @@ Therefore, this application will not run into any issues if it is restarted, res
 | METRICS                      | Expose metrics in Prometheus format at `:${METRICS_PORT}/metrics`                                                                                                                                                                                                             | no       | `""`        | 
 | SLOW_MODE                    | If enabled, every time a node is terminated during an execution, the current execution will stop rather than continuing to the next ASG                                                                                                                                       | no       | `false`     |
 | EAGER_CORDONING              | If enabled, all outdated nodes will get cordoned before any rolling update action. The default mode is to cordon a node just before draining it. See [#41](https://github.com/TwiN/aws-eks-asg-rolling-update-handler/issues/41) for possible consequences of enabling this.  | no       | `false`     |
+| EXCLUDE_FROM_EXTERNAL_LOAD_BALANCERS              | If enabled, node label `node.kubernetes.io/exclude-from-external-load-balancers=true` will be added to nodes before draining. See [#131](https://github.com/TwiN/aws-eks-asg-rolling-update-handler/pull/131) for more information  | no       | `false`     |
 
 **NOTE:** Only one of `CLUSTER_NAME`, `AUTODISCOVERY_TAGS` or `AUTO_SCALING_GROUP_NAMES` must be set.
 

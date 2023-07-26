@@ -12,48 +12,51 @@ import (
 var cfg *config
 
 const (
-	EnvEnvironment               = "ENVIRONMENT"
-	EnvDebug                     = "DEBUG"
-	EnvIgnoreDaemonSets          = "IGNORE_DAEMON_SETS"
-	EnvDeleteLocalData           = "DELETE_LOCAL_DATA" // Deprecated: in favor of DeleteEmptyDirData (DELETE_EMPTY_DIR_DATA)
-	EnvDeleteEmptyDirData        = "DELETE_EMPTY_DIR_DATA"
-	EnvClusterName               = "CLUSTER_NAME"
-	EnvAutodiscoveryTags         = "AUTODISCOVERY_TAGS"
-	EnvAutoScalingGroupNames     = "AUTO_SCALING_GROUP_NAMES"
-	EnvAwsRegion                 = "AWS_REGION"
-	EnvExecutionInterval         = "EXECUTION_INTERVAL"
-	EnvExecutionTimeout          = "EXECUTION_TIMEOUT"
-	EnvPodTerminationGracePeriod = "POD_TERMINATION_GRACE_PERIOD"
-	EnvMetrics                   = "METRICS"
-	EnvMetricsPort               = "METRICS_PORT"
-	EnvSlowMode                  = "SLOW_MODE"
-	EnvEagerCordoning            = "EAGER_CORDONING"
+	EnvEnvironment                      = "ENVIRONMENT"
+	EnvDebug                            = "DEBUG"
+	EnvIgnoreDaemonSets                 = "IGNORE_DAEMON_SETS"
+	EnvDeleteLocalData                  = "DELETE_LOCAL_DATA" // Deprecated: in favor of DeleteEmptyDirData (DELETE_EMPTY_DIR_DATA)
+	EnvDeleteEmptyDirData               = "DELETE_EMPTY_DIR_DATA"
+	EnvClusterName                      = "CLUSTER_NAME"
+	EnvAutodiscoveryTags                = "AUTODISCOVERY_TAGS"
+	EnvAutoScalingGroupNames            = "AUTO_SCALING_GROUP_NAMES"
+	EnvAwsRegion                        = "AWS_REGION"
+	EnvExecutionInterval                = "EXECUTION_INTERVAL"
+	EnvExecutionTimeout                 = "EXECUTION_TIMEOUT"
+	EnvPodTerminationGracePeriod        = "POD_TERMINATION_GRACE_PERIOD"
+	EnvMetrics                          = "METRICS"
+	EnvMetricsPort                      = "METRICS_PORT"
+	EnvSlowMode                         = "SLOW_MODE"
+	EnvEagerCordoning                   = "EAGER_CORDONING"
+	EnvExcludeFromExternalLoadBalancers = "EXLUDE_FROM_EXTERNAL_LOAD_BALANCERS"
 )
 
 type config struct {
-	Environment               string        // Optional
-	Debug                     bool          // Defaults to false
-	AutoScalingGroupNames     []string      // Required if AutodiscoveryTags not provided
-	AutodiscoveryTags         string        // Required if AutoScalingGroupNames not provided
-	AwsRegion                 string        // Defaults to us-west-2
-	IgnoreDaemonSets          bool          // Defaults to true
-	DeleteEmptyDirData        bool          // Defaults to true
-	ExecutionInterval         time.Duration // Defaults to 20s
-	ExecutionTimeout          time.Duration // Defaults to 900s
-	PodTerminationGracePeriod int           // Defaults to -1
-	Metrics                   bool          // Defaults to false
-	MetricsPort               int           // Defaults to 8080
-	SlowMode                  bool          // Defaults to false
-	EagerCordoning            bool          // Defaults to false
+	Environment                      string        // Optional
+	Debug                            bool          // Defaults to false
+	AutoScalingGroupNames            []string      // Required if AutodiscoveryTags not provided
+	AutodiscoveryTags                string        // Required if AutoScalingGroupNames not provided
+	AwsRegion                        string        // Defaults to us-west-2
+	IgnoreDaemonSets                 bool          // Defaults to true
+	DeleteEmptyDirData               bool          // Defaults to true
+	ExecutionInterval                time.Duration // Defaults to 20s
+	ExecutionTimeout                 time.Duration // Defaults to 900s
+	PodTerminationGracePeriod        int           // Defaults to -1
+	Metrics                          bool          // Defaults to false
+	MetricsPort                      int           // Defaults to 8080
+	SlowMode                         bool          // Defaults to false
+	EagerCordoning                   bool          // Defaults to false
+	ExcludeFromExternalLoadBalancers bool          // defaults to false
 }
 
 // Initialize is used to initialize the application's configuration
 func Initialize() error {
 	cfg = &config{
-		Environment:    strings.ToLower(os.Getenv(EnvEnvironment)),
-		Debug:          strings.ToLower(os.Getenv(EnvDebug)) == "true",
-		SlowMode:       strings.ToLower(os.Getenv(EnvSlowMode)) == "true",
-		EagerCordoning: strings.ToLower(os.Getenv(EnvEagerCordoning)) == "true",
+		Environment:                      strings.ToLower(os.Getenv(EnvEnvironment)),
+		Debug:                            strings.ToLower(os.Getenv(EnvDebug)) == "true",
+		SlowMode:                         strings.ToLower(os.Getenv(EnvSlowMode)) == "true",
+		EagerCordoning:                   strings.ToLower(os.Getenv(EnvEagerCordoning)) == "true",
+		ExcludeFromExternalLoadBalancers: strings.ToLower(os.Getenv(EnvExcludeFromExternalLoadBalancers)) == "true",
 	}
 	if clusterName := os.Getenv(EnvClusterName); len(clusterName) > 0 {
 		// See "Prerequisites" in https://docs.aws.amazon.com/eks/latest/userguide/autoscaling.html
