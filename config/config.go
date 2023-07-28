@@ -46,7 +46,7 @@ type config struct {
 	MetricsPort                      int           // Defaults to 8080
 	SlowMode                         bool          // Defaults to false
 	EagerCordoning                   bool          // Defaults to false
-	ExcludeFromExternalLoadBalancers bool          // defaults to false
+	ExcludeFromExternalLoadBalancers bool          // Defaults to false
 }
 
 // Initialize is used to initialize the application's configuration
@@ -138,21 +138,22 @@ func Initialize() error {
 
 // Set sets the application's configuration and is intended to be used for testing purposes.
 // See Initialize() for production
-func Set(autoScalingGroupNames []string, ignoreDaemonSets, deleteEmptyDirData, eagerCordoning bool) {
+func Set(autoScalingGroupNames []string, ignoreDaemonSets, deleteEmptyDirData, eagerCordoning bool, excludeFromExternalLoadBalancers bool) {
 	cfg = &config{
-		AutoScalingGroupNames: autoScalingGroupNames,
-		IgnoreDaemonSets:      ignoreDaemonSets,
-		DeleteEmptyDirData:    deleteEmptyDirData,
-		EagerCordoning:        eagerCordoning,
-		ExecutionInterval:     time.Second * 20,
-		ExecutionTimeout:      time.Second * 900,
+		AutoScalingGroupNames:            autoScalingGroupNames,
+		IgnoreDaemonSets:                 ignoreDaemonSets,
+		DeleteEmptyDirData:               deleteEmptyDirData,
+		EagerCordoning:                   eagerCordoning,
+		ExcludeFromExternalLoadBalancers: excludeFromExternalLoadBalancers,
+		ExecutionInterval:                time.Second * 20,
+		ExecutionTimeout:                 time.Second * 900,
 	}
 }
 
 func Get() *config {
 	if cfg == nil {
 		log.Println("Config wasn't initialized prior to being called. Assuming this is a test.")
-		Set(nil, true, true, false)
+		Set(nil, true, true, false, false)
 	}
 	return cfg
 }

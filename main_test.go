@@ -683,8 +683,8 @@ func TestHasAcceptableNumberOfUpdatedNonReadyNodes(t *testing.T) {
 }
 
 func TestHandleRollingUpgrade_withEagerCordoning(t *testing.T) {
-	config.Set(nil, true, true, true)
-	defer config.Set(nil, true, true, false)
+	config.Set(nil, true, true, true, false)
+	defer config.Set(nil, true, true, false, false)
 
 	oldInstance1 := cloudtest.CreateTestAutoScalingInstance("old-1", "v1", nil, "InService")
 	oldInstance2 := cloudtest.CreateTestAutoScalingInstance("old-2", "v1", nil, "InService")
@@ -718,7 +718,8 @@ func TestHandleRollingUpgrade_withEagerCordoning(t *testing.T) {
 
 func TestHandleRollingUpgrade_withEagerCordoningDisabled(t *testing.T) {
 	// explicitly setting this, but eager cordoning is disabled by default anyways
-	config.Set(nil, true, true, false)
+	config.Set(nil, true, true, false, true)
+	defer config.Set(nil, true, true, true, false)
 
 	oldInstance1 := cloudtest.CreateTestAutoScalingInstance("old-1", "v1", nil, "InService")
 	oldInstance2 := cloudtest.CreateTestAutoScalingInstance("old-2", "v1", nil, "InService")
@@ -744,5 +745,95 @@ func TestHandleRollingUpgrade_withEagerCordoningDisabled(t *testing.T) {
 	// Make sure that all nodes were NOT "eagerly cordoned"
 	if mockClient.Counter["Cordon"] != 0 {
 		t.Error("Eager cordoning is not enabled, so no node should have been cordoned on the first execution")
+	}
+}
+
+func TestHandleRollingUpgrade_withExcludeFromExternalLoadBalancers(t *testing.T) {
+	config.Set(nil, true, true, false, true)
+	defer config.Set(nil, true, true, false, false)
+
+	oldInstance := cloudtest.CreateTestAutoScalingInstance("old-1", "v1", nil, "InService")
+	asg := cloudtest.CreateTestAutoScalingGroup("asg", "v2", nil, []*autoscaling.Instance{oldInstance}, false)
+
+	oldNode := k8stest.CreateTestNode("old-node-1", aws.StringValue(oldInstance.AvailabilityZone), aws.StringValue(oldInstance.InstanceId), "1000m", "1000Mi")
+	oldNodePod := k8stest.CreateTestPod("old-pod-1", oldNode.Name, "100m", "100Mi", false, v1.PodRunning)
+
+	mockClient := k8stest.NewMockClient([]v1.Node{oldNode}, []v1.Pod{oldNodePod})
+	mockEc2Service := cloudtest.NewMockEC2Service(nil)
+	mockAutoScalingService := cloudtest.NewMockAutoScalingService([]*autoscaling.Group{asg})
+
+	// First run (Node rollout process gets marked as started)
+	err := HandleRollingUpgrade(mockClient, mockEc2Service, mockAutoScalingService, []*autoscaling.Group{asg})
+	if err != nil {
+		t.Error("unexpected error:", err)
+	}
+	if mockClient.Counter["UpdateNode"] != 1 {
+		t.Error("Node should've been annotated, meaning that UpdateNode should've been called once")
+	}
+
+	// Second run (ASG's desired capacity gets increased)
+	err = HandleRollingUpgrade(mockClient, mockEc2Service, mockAutoScalingService, []*autoscaling.Group{asg})
+	if err != nil {
+		t.Error("unexpected error:", err)
+	}
+	if mockAutoScalingService.Counter["SetDesiredCapacity"] != 1 {
+		t.Error("ASG should've been increased because there's no updated nodes yet")
+	}
+	asg = mockAutoScalingService.AutoScalingGroups[aws.StringValue(asg.AutoScalingGroupName)]
+	if aws.Int64Value(asg.DesiredCapacity) != 2 {
+		t.Error("The desired capacity of the ASG should've been increased to 2")
+	}
+
+	// Third run (Nothing changed)
+	err = HandleRollingUpgrade(mockClient, mockEc2Service, mockAutoScalingService, []*autoscaling.Group{asg})
+	if err != nil {
+		t.Error("unexpected error:", err)
+	}
+	if mockAutoScalingService.Counter["SetDesiredCapacity"] != 1 {
+		t.Error("Desired capacity shouldn't have been updated")
+	}
+	asg = mockAutoScalingService.AutoScalingGroups[aws.StringValue(asg.AutoScalingGroupName)]
+	if aws.Int64Value(asg.DesiredCapacity) != 2 {
+		t.Error("The desired capacity of the ASG should've stayed at 2")
+	}
+
+	// Fourth run (new instance has been registered to ASG, but is pending)
+	newInstance := cloudtest.CreateTestAutoScalingInstance("new-1", "v2", nil, "Pending")
+	asg.Instances = append(asg.Instances, newInstance)
+	err = HandleRollingUpgrade(mockClient, mockEc2Service, mockAutoScalingService, []*autoscaling.Group{asg})
+	if err != nil {
+		t.Error("unexpected error:", err)
+	}
+	if mockAutoScalingService.Counter["SetDesiredCapacity"] != 1 {
+		t.Error("Desired capacity shouldn't have been updated")
+	}
+
+	// Fifth run (new instance is now InService, but node has still not joined cluster (GetNodeByAutoScalingInstance should return not found))
+	newInstance.SetLifecycleState("InService")
+	err = HandleRollingUpgrade(mockClient, mockEc2Service, mockAutoScalingService, []*autoscaling.Group{asg})
+	if err != nil {
+		t.Error("unexpected error:", err)
+	}
+
+	// Sixth run (new instance has joined the cluster, but Kubelet isn't ready to accept pods yet)
+	newNode := k8stest.CreateTestNode("new-node-1", aws.StringValue(newInstance.AvailabilityZone), aws.StringValue(newInstance.InstanceId), "1000m", "1000Mi")
+	newNode.Status.Conditions = []v1.NodeCondition{{Type: v1.NodeReady, Status: v1.ConditionFalse}}
+	mockClient.Nodes[newNode.Name] = newNode
+	err = HandleRollingUpgrade(mockClient, mockEc2Service, mockAutoScalingService, []*autoscaling.Group{asg})
+	if err != nil {
+		t.Error("unexpected error:", err)
+	}
+
+	// Seventh run (Kubelet is ready to accept new pods. Old node gets drained and terminated)
+	newNode = mockClient.Nodes[newNode.Name]
+	newNode.Status.Conditions = []v1.NodeCondition{{Type: v1.NodeReady, Status: v1.ConditionTrue}}
+	mockClient.Nodes[newNode.Name] = newNode
+	err = HandleRollingUpgrade(mockClient, mockEc2Service, mockAutoScalingService, []*autoscaling.Group{asg})
+	if err != nil {
+		t.Error("unexpected error:", err)
+	}
+	oldNode = mockClient.Nodes[oldNode.Name]
+	if _, ok := oldNode.GetLabels()[k8s.LabelExcludeFromExternalLoadBalancers]; !ok {
+		t.Error("Node should've been labeled")
 	}
 }

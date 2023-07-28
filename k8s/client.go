@@ -9,7 +9,7 @@ import (
 	"github.com/TwiN/gocache/v2"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/autoscaling"
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/kubectl/pkg/drain"
@@ -19,6 +19,8 @@ const (
 	AnnotationRollingUpdateStartedTimestamp    = "aws-eks-asg-rolling-update-handler.twin.sh/started-at"
 	AnnotationRollingUpdateDrainedTimestamp    = "aws-eks-asg-rolling-update-handler.twin.sh/drained-at"
 	AnnotationRollingUpdateTerminatedTimestamp = "aws-eks-asg-rolling-update-handler.twin.sh/terminated-at"
+
+	LabelExcludeFromExternalLoadBalancers = "node.kubernetes.io/exclude-from-external-load-balancers"
 
 	nodesCacheKey = "nodes"
 )

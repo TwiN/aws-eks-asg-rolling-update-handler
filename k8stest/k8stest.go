@@ -6,7 +6,7 @@ import (
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/autoscaling"
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -100,6 +100,7 @@ func CreateTestNode(name, availabilityZone, instanceId, allocatableCpu, allocata
 	}
 	node.SetName(name)
 	node.SetAnnotations(make(map[string]string))
+	node.SetLabels(make(map[string]string))
 	return node
 }
 
