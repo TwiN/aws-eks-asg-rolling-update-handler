@@ -187,6 +187,10 @@ func DoHandleRollingUpgrade(client k8s.ClientAPI, ec2Service ec2iface.EC2API, au
 				if hasEnoughResources {
 					log.Printf("[%s][%s] Updated nodes have enough resources available", aws.StringValue(autoScalingGroup.AutoScalingGroupName), aws.StringValue(outdatedInstance.InstanceId))
 					if minutesSinceDrained == -1 {
+						if config.Get().ExcludeFromExternalLoadBalancers {
+							log.Printf("[%s][%s] Label node to exlude from external load balancers", aws.StringValue(autoScalingGroup.AutoScalingGroupName), aws.StringValue(outdatedInstance.InstanceId))
+							k8s.LabelNodeByAutoScalingInstance(client, outdatedInstance, k8s.LabelExcludeFromExternalLoadBalancers, "true")
+						}
 						log.Printf("[%s][%s] Draining node", aws.StringValue(autoScalingGroup.AutoScalingGroupName), aws.StringValue(outdatedInstance.InstanceId))
 						err := client.Drain(node.Name, config.Get().IgnoreDaemonSets, config.Get().DeleteEmptyDirData, config.Get().PodTerminationGracePeriod)
 						if err != nil {

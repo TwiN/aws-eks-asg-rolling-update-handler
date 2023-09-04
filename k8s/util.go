@@ -4,7 +4,7 @@ import (
 	"log"
 
 	"github.com/aws/aws-sdk-go/service/autoscaling"
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 )
 
 // CheckIfNodeHasEnoughResourcesToTransferAllPodsInNodes calculates the resources available in the target nodes
@@ -96,6 +96,24 @@ func AnnotateNodeByAutoScalingInstance(client ClientAPI, instance *autoscaling.I
 	if currentValue := annotations[key]; currentValue != value {
 		annotations[key] = value
 		node.SetAnnotations(annotations)
+		err = client.UpdateNode(node)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// Label Node adds an Label  to the Kubernetes node represented by a given AWS instance
+func LabelNodeByAutoScalingInstance(client ClientAPI, instance *autoscaling.Instance, key, value string) error {
+	node, err := client.GetNodeByAutoScalingInstance(instance)
+	if err != nil {
+		return err
+	}
+	labels := node.GetLabels()
+	if currentValue := labels[key]; currentValue != value {
+		labels[key] = value
+		node.SetLabels(labels)
 		err = client.UpdateNode(node)
 		if err != nil {
 			return err
