@@ -28,7 +28,7 @@ const (
 	EnvMetricsPort                      = "METRICS_PORT"
 	EnvSlowMode                         = "SLOW_MODE"
 	EnvEagerCordoning                   = "EAGER_CORDONING"
-	EnvExcludeFromExternalLoadBalancers = "EXLUDE_FROM_EXTERNAL_LOAD_BALANCERS"
+	EnvExcludeFromExternalLoadBalancers = "EXCLUDE_FROM_EXTERNAL_LOAD_BALANCERS"
 )
 
 type config struct {
