@@ -7,16 +7,16 @@ import (
 	v1 "k8s.io/api/core/v1"
 )
 
-// CheckIfNodeHasEnoughResourcesToTransferAllPodsInNodes calculates the resources available in the target nodes
+// CheckIfUpdatedNodesHaveEnoughResourcesToScheduleAllPodsFromOldNode calculates the resources available in the target nodes
 // and compares them with the resources that would be required if the old node were to be drained
 //
-// This is not fool proof: 2 targetNodes with 1G available in each would cause the assumption that you can fit
+// This is not foolproof: 2 targetNodes with 1G available in each would cause the assumption that you can fit
 // a 2G pod in the targetNodes when you obviously can't (you'd need 1 node with 2G available, not 2 with 1G)
 // That's alright, because the purpose is to provide a smooth rolling upgrade, not a flawless experience,  and
 // while the latter is definitely possible, it would slow down the process by quite a bit. In a way, this is
 // the beauty of co-existing with the cluster autoscaler; an extra node will be spun up to handle the leftovers,
 // if any.
-func CheckIfNodeHasEnoughResourcesToTransferAllPodsInNodes(client ClientAPI, oldNode *v1.Node, targetNodes []*v1.Node) bool {
+func CheckIfUpdatedNodesHaveEnoughResourcesToScheduleAllPodsFromOldNode(client ClientAPI, oldNode *v1.Node, targetNodes []*v1.Node) bool {
 	totalAvailableTargetCPU := int64(0)
 	totalAvailableTargetMemory := int64(0)
 	// Get resources available in target nodes
@@ -104,7 +104,7 @@ func AnnotateNodeByAutoScalingInstance(client ClientAPI, instance *autoscaling.I
 	return nil
 }
 
-// Label Node adds an Label  to the Kubernetes node represented by a given AWS instance
+// LabelNodeByAutoScalingInstance adds a Label to the Kubernetes node represented by a given AWS instance
 func LabelNodeByAutoScalingInstance(client ClientAPI, instance *autoscaling.Instance, key, value string) error {
 	node, err := client.GetNodeByAutoScalingInstance(instance)
 	if err != nil {
