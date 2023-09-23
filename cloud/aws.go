@@ -112,18 +112,32 @@ func DescribeLaunchTemplate(svc ec2iface.EC2API, input *ec2.DescribeLaunchTempla
 	return templatesOutput.LaunchTemplates[0], nil
 }
 
-func SetAutoScalingGroupDesiredCount(svc autoscalingiface.AutoScalingAPI, asg *autoscaling.Group, count int64) error {
-	if count > aws.Int64Value(asg.MaxSize) {
+// IncrementAutoScalingGroupDesiredCount retrieves the latest definition of the ASG and increments its current
+// desired capacity by 1. The reason why we retrieve the ASG again even though we already have it is to avoid a
+// scenario in which the ASG had already been scaled up or down since the last time it was retrieved.
+// See https://github.com/TwiN/aws-eks-asg-rolling-update-handler/issues/129 for more information.
+func IncrementAutoScalingGroupDesiredCount(svc autoscalingiface.AutoScalingAPI, autoScalingGroupName string) error {
+	latestASGs, err := DescribeAutoScalingGroupsByNames(svc, []string{autoScalingGroupName})
+	if err != nil {
+		return fmt.Errorf("failed to retrieve latest asg with name '%s': %w", autoScalingGroupName, err)
+	}
+	if len(latestASGs) != 1 {
+		// ASG names are unique per region and account, so if there isn't exactly one ASG, there's a problem.
+		return errors.New("failed to retrieve latest asg with name: " + autoScalingGroupName)
+	}
+	asg := latestASGs[0]
+	newDesiredCapacity := aws.Int64Value(asg.DesiredCapacity) + 1
+	if newDesiredCapacity > aws.Int64Value(asg.MaxSize) {
 		return ErrCannotIncreaseDesiredCountAboveMax
 	}
 	desiredInput := &autoscaling.SetDesiredCapacityInput{
 		AutoScalingGroupName: asg.AutoScalingGroupName,
-		DesiredCapacity:      aws.Int64(count),
+		DesiredCapacity:      aws.Int64(newDesiredCapacity),
 		HonorCooldown:        aws.Bool(true),
 	}
-	_, err := svc.SetDesiredCapacity(desiredInput)
+	_, err = svc.SetDesiredCapacity(desiredInput)
 	if err != nil {
-		return fmt.Errorf("unable to increase ASG %s desired count to %d: %v", aws.StringValue(asg.AutoScalingGroupName), count, err)
+		return fmt.Errorf("unable to increase ASG %s desired count to %d: %w", autoScalingGroupName, newDesiredCapacity, err)
 	}
 	return nil
 }
