@@ -2,6 +2,7 @@
 FROM golang:alpine as builder
 WORKDIR /app
 ADD . ./
+RUN go mod tidy
 RUN CGO_ENABLED=0 GOOS=linux go build -buildvcs=false -a -installsuffix cgo -o aws-eks-asg-rolling-update-handler .
 RUN apk --update add ca-certificates
 
