@@ -6,9 +6,9 @@ require (
 	github.com/TwiN/gocache/v2 v2.2.2
 	github.com/aws/aws-sdk-go v1.53.19
 	github.com/prometheus/client_golang v1.19.1
-	k8s.io/api v0.30.1
-	k8s.io/apimachinery v0.30.1
-	k8s.io/client-go v0.30.1
+	k8s.io/api v0.30.2
+	k8s.io/apimachinery v0.30.2
+	k8s.io/client-go v0.30.2
 	k8s.io/kubectl v0.30.1
 )
 
