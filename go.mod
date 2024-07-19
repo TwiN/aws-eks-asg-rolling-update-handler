@@ -7,7 +7,7 @@ require (
 	github.com/aws/aws-sdk-go v1.54.15
 	github.com/prometheus/client_golang v1.19.1
 	k8s.io/api v0.30.2
-	k8s.io/apimachinery v0.30.2
+	k8s.io/apimachinery v0.30.3
 	k8s.io/client-go v0.30.2
 	k8s.io/kubectl v0.30.2
 )
