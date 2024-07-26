@@ -4,7 +4,7 @@ go 1.22.0
 
 require (
 	github.com/TwiN/gocache/v2 v2.2.2
-	github.com/aws/aws-sdk-go v1.54.15
+	github.com/aws/aws-sdk-go v1.54.20
 	github.com/prometheus/client_golang v1.19.1
 	k8s.io/api v0.30.3
 	k8s.io/apimachinery v0.30.3
