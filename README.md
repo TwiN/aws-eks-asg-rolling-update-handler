@@ -1,6 +1,6 @@
 # aws-eks-asg-rolling-update-handler
 
-![test](https://github.com/TwiN/aws-eks-asg-rolling-update-handler/workflows/test/badge.svg?branch=master)
+![test](https://github.com/TwiN/aws-eks-asg-rolling-update-handler/actions/workflows/test.yml/badge.svg)
 [![Go Report Card](https://goreportcard.com/badge/github.com/TwiN/aws-eks-asg-rolling-update-handler)](https://goreportcard.com/report/github.com/TwiN/aws-eks-asg-rolling-update-handler)
 [![Docker pulls](https://img.shields.io/docker/pulls/twinproduction/aws-eks-asg-rolling-update-handler.svg)](https://cloud.docker.com/repository/docker/twinproduction/aws-eks-asg-rolling-update-handler)
 
