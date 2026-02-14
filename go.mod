@@ -1,6 +1,6 @@
 module github.com/TwiN/aws-eks-asg-rolling-update-handler
 
-go 1.25.0
+go 1.25.7
 
 require (
 	github.com/TwiN/gocache/v2 v2.4.0
